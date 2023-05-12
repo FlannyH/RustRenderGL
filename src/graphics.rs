@@ -119,6 +119,7 @@ impl Renderer {
                 gl::BindVertexArray(0);
                 gl::BindBuffer(gl::ARRAY_BUFFER, 0);
 
+                // If we get an error, stop and don't return the model - this should be very unlikely though
                 let error = gl::GetError();
                 if error != gl::NO_ERROR {
                     return Err(error)
