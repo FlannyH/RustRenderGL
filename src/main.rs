@@ -5,10 +5,22 @@ mod helpers;
 mod mesh;
 mod structs;
 mod texture;
+use std::path::Path;
+
 use graphics::Renderer;
+use mesh::Model;
 
 fn main() {
     let mut renderer = Renderer::new(1280, 720, "FlanRustRenderer (OpenGL)");
+
+    // todo: implement source-style error model in code, for when a mesh isn't there
+    let mesh_spyro = match Model::load_gltf(Path::new("assets/spyro.gltf")) {
+        Ok(model) => model,
+        Err(err) => {
+            println!("{}", err);
+            Model::new()
+        }
+    };
 
     // Main loop
     while !renderer.should_close() {

@@ -255,9 +255,14 @@ fn traverse_nodes(
 }
 
 impl Model {
-    pub(crate) fn create_from_gltf(&mut self, path: &Path) {
+    pub(crate) fn load_gltf(path: &Path) -> Result<Model, &str> {
+        let mut model = Model::new();
+
         // Load GLTF from file
         let gltf_file = gltf::import(path);
+        if gltf_file.is_err() {
+            return Err("Failed to load GLTF file {path}!");
+        }
         let (gltf_document, mesh_data, image_data) = gltf_file.unwrap();
 
         // Loop over each scene
@@ -265,7 +270,7 @@ impl Model {
         if let Some(scene) = scene {
             // For each scene, get the nodes
             for node in scene.nodes() {
-                traverse_nodes(&node, &mesh_data, Mat4::IDENTITY, &mut self.meshes);
+                traverse_nodes(&node, &mesh_data, Mat4::IDENTITY, &mut model.meshes);
             }
         }
 
@@ -287,8 +292,6 @@ impl Model {
 
                 // Load the texture from that image data
                 tex = Texture::load_texture_from_gltf_image(image);
-                // Generate mipmaps
-                //tex.generate_mipmaps();
 
                 // Get sampler mode
                 let gltf_sampler = gltf_tex_info_unwrapped.texture().sampler();
@@ -372,11 +375,12 @@ impl Model {
                 };
             }
 
-            self.materials.insert(
+            model.materials.insert(
                 String::from(material.name().unwrap_or("untitled")),
                 _new_material,
             );
         }
+        Ok(model)
     }
 
     pub(crate) fn new() -> Model {
