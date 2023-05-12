@@ -76,7 +76,8 @@ fn create_vertex_array(
     let mut normal_vec = Vec::<Vec3>::new();
     let mut tangent_vec = Vec::<Vec4>::new();
     let mut colour_vec = Vec::<Vec4>::new();
-    let mut texcoord_vec = Vec::<Vec2>::new();
+    let mut texcoord0_vec = Vec::<Vec2>::new();
+    let mut texcoord1_vec = Vec::<Vec2>::new();
     let mut indices = Vec::<u16>::new();
 
     // Loop over all the primitive attributes
@@ -120,7 +121,14 @@ fn create_vertex_array(
                 let values = convert_gltf_buffer_to_f32(buffer_slice, &accessor);
                 for i in (0..accessor.count() * 2).step_by(2) {
                     let slice = &values[i..i + 2];
-                    texcoord_vec.push(Vec2::from_slice(slice));
+                    texcoord0_vec.push(Vec2::from_slice(slice));
+                }
+            }
+            "TEXCOORD_1" => {
+                let values = convert_gltf_buffer_to_f32(buffer_slice, &accessor);
+                for i in (0..accessor.count() * 2).step_by(2) {
+                    let slice = &values[i..i + 2];
+                    texcoord1_vec.push(Vec2::from_slice(slice));
                 }
             }
             "COLOR_0" => {
@@ -164,9 +172,10 @@ fn create_vertex_array(
         let mut vertex = Vertex {
             position: Vec3::new(0., 0., 0.),
             normal: Vec3::new(0., 0., 0.),
-            tangent: Vec3::new(0., 0., 0.),
-            colour: Vec3::new(1., 1., 1.),
-            uv: Vec2::new(0., 0.),
+            tangent: Vec4::new(0., 0., 0., 0.),
+            colour: Vec4::new(1., 1., 1., 1.),
+            uv0: Vec2::new(0., 0.),
+            uv1: Vec2::new(0., 0.),
         };
         if !position_vec.is_empty() {
             let pos3 = position_vec[index as usize];
@@ -176,10 +185,17 @@ fn create_vertex_array(
             vertex.normal = local_matrix.transform_vector3(normal_vec[index as usize]);
         }
         if !tangent_vec.is_empty() {
-            vertex.tangent = local_matrix.transform_vector3(tangent_vec[index as usize].xyz());
+            let tangent_vec3 = local_matrix.transform_vector3(tangent_vec[index as usize].xyz());
+            vertex.tangent.x = tangent_vec3.x;
+            vertex.tangent.y = tangent_vec3.y;
+            vertex.tangent.z = tangent_vec3.z;
+            vertex.tangent.w = tangent_vec[index as usize].w;
         }
-        if !texcoord_vec.is_empty() {
-            vertex.uv = texcoord_vec[index as usize];
+        if !texcoord0_vec.is_empty() {
+            vertex.uv0 = texcoord0_vec[index as usize];
+        }
+        if !texcoord1_vec.is_empty() {
+            vertex.uv1 = texcoord1_vec[index as usize];
         }
         if !colour_vec.is_empty() {
             vertex.colour.x = f32::powf(colour_vec[index as usize].x, 1.0 / 2.2);

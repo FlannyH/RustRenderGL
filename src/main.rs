@@ -23,7 +23,7 @@ fn main() {
     };
 
     // Upload the mesh to the GPU
-    renderer.upload_model(model_spyro);
+    renderer.upload_model(model_spyro).expect("Failed to upload model!");
 
     // Main loop
     while !renderer.should_close() {

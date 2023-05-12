@@ -4,9 +4,10 @@ use glam::{Mat4, Quat, Vec2, Vec3, Vec4};
 pub struct Vertex {
     pub position: Vec3,
     pub normal: Vec3,
-    pub tangent: Vec3,
-    pub colour: Vec3,
-    pub uv: Vec2,
+    pub tangent: Vec4,
+    pub colour: Vec4,
+    pub uv0: Vec2,
+    pub uv1: Vec2,
 }
 
 #[derive(Debug, Copy, Clone)]
