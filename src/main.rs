@@ -1,4 +1,10 @@
+#![allow(clippy::identity_op, dead_code, unused_variables)]
+
 mod graphics;
+mod helpers;
+mod mesh;
+mod structs;
+mod texture;
 use graphics::Renderer;
 
 fn main() {
