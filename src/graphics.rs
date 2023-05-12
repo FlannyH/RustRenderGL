@@ -7,6 +7,14 @@ pub struct Renderer {
     events: Receiver<(f64, WindowEvent)>,
 }
 
+pub struct MeshGPU {
+    vao: i32,
+}
+
+pub struct ModelGPU {
+    meshes: Vec<MeshGPU>,
+}
+
 impl Renderer {
     pub fn new(width: u32, height: u32, title: &str) -> Renderer {
         // Initialize GLFW
@@ -54,6 +62,17 @@ impl Renderer {
             if let glfw::WindowEvent::Key(Key::Escape, _, Action::Press, _) = event {
                 self.window.set_should_close(true)
             }
+        }
+    }
+
+    pub fn upload_model(&self, model_spyro: crate::mesh::Model) {
+        let mut model_gpu = ModelGPU { meshes: Vec::new() };
+
+        for (name, mesh) in model_spyro.meshes {
+            println!()
+        }
+        unsafe {
+            //gl::GenVertexArrays(1, &mut vao);
         }
     }
 }
