@@ -14,7 +14,7 @@ fn main() {
     let mut renderer = Renderer::new(1280, 720, "FlanRustRenderer (OpenGL)");
 
     // todo: implement source-style error model in code, for when a mesh isn't there
-    let model_spyro = match Model::load_gltf(Path::new("assets/spyro.gltf")) {
+    let model_spyro_cpu = match Model::load_gltf(Path::new("assets/spyro.gltf")) {
         Ok(model) => model,
         Err(err) => {
             println!("{}", err);
@@ -23,11 +23,12 @@ fn main() {
     };
 
     // Upload the mesh to the GPU
-    renderer.upload_model(model_spyro).expect("Failed to upload model!");
+    let model_spyro_gpu = renderer.upload_model(model_spyro_cpu).expect("Failed to upload model!");
 
     // Main loop
     while !renderer.should_close() {
         renderer.begin_frame();
+        renderer.draw_model(&model_spyro_gpu);
         renderer.end_frame();
     }
 }

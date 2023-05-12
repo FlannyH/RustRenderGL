@@ -1,24 +1,32 @@
 use glfw::{Action, Context, Glfw, Key, Window, WindowEvent};
 use std::{sync::mpsc::Receiver, mem::size_of};
+use queues::{queue, Queue, IsQueue};
 
-use crate::structs::Vertex;
+use crate::{structs::Vertex};
 
 pub struct Renderer {
+    // Window stuff
     glfw: Glfw,
     window: Window,
     events: Receiver<(f64, WindowEvent)>,
+
+    // Mesh render queue
+    mesh_queue: Queue<MeshGPU>
 }
 
+#[derive(Clone)]
 pub struct MeshGPU {
     vao: u32,
     vbo: u32,
+    n_triangles: i32
 }
 
 impl MeshGPU {
     pub fn new() -> Self {
         MeshGPU {
             vao: 0,
-            vbo: 0
+            vbo: 0,
+            n_triangles: 0,
         }
     }
 }
@@ -49,6 +57,7 @@ impl Renderer {
             glfw,
             window,
             events,
+            mesh_queue: queue![],
         }
     }
 
@@ -59,11 +68,32 @@ impl Renderer {
     pub fn begin_frame(&self) {
         unsafe {
             gl::ClearColor(0.1, 0.1, 0.2, 1.0);
-            gl::Clear(gl::COLOR_BUFFER_BIT);
+            gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
         }
     }
 
     pub fn end_frame(&mut self) {
+        // Enable depth testing
+        // todo: separate all the unsafe gl parts into separate functions
+        unsafe {
+            gl::Enable(gl::DEPTH_TEST);
+            gl::Enable(gl::CULL_FACE);
+        }
+
+        // Render mesh queue
+        while let Ok(mesh) = self.mesh_queue.remove() {
+            // Render the first mesh in the queue
+            unsafe {
+                // Bind the vertex buffer
+                gl::BindVertexArray(mesh.vao);
+                gl::BindBuffer(gl::ARRAY_BUFFER, mesh.vbo);
+    
+                // Draw the model
+                gl::DrawArrays(gl::TRIANGLES, 0, mesh.n_triangles);
+            }
+        }
+        
+
         // Swap front and back buffers
         self.window.swap_buffers();
 
@@ -77,11 +107,11 @@ impl Renderer {
         }
     }
 
-    pub fn upload_model(&self, model_spyro: crate::mesh::Model) -> Result<ModelGPU, u32> {
+    pub fn upload_model(&self, model_cpu: crate::mesh::Model) -> Result<ModelGPU, u32> {
         let mut model_gpu = ModelGPU { meshes: Vec::new() };
 
         // For each submesh in the model
-        for (name, mesh) in model_spyro.meshes {
+        for (name, mesh) in model_cpu.meshes {
             println!("Parsing mesh \"{name}\"");
             // Create a new mesh entry in the model_gpu object
             let mut curr_mesh = MeshGPU::new();
@@ -124,11 +154,25 @@ impl Renderer {
                 if error != gl::NO_ERROR {
                     return Err(error)
                 }
+
+                // Let's set the number of triangles this mesh has
+                curr_mesh.n_triangles = (mesh.verts.len() / 3) as i32;
             }
 
             // Add this mesh to the model_gpu object
             model_gpu.meshes.push(curr_mesh);
         }
         Ok(model_gpu)
+    }
+
+    pub fn draw_model(&mut self, model_gpu: &ModelGPU) {
+        // Render each mesh separately
+        for mesh in &model_gpu.meshes {
+            self.draw_mesh(mesh);
+        }
+    }
+
+    pub fn draw_mesh(&mut self, mesh: &MeshGPU) {
+        self.mesh_queue.add(mesh.clone()).expect("Failed to add mesh to mesh queue");
     }
 }
