@@ -174,6 +174,10 @@ impl Renderer {
                 gl::BindBuffer(gl::ARRAY_BUFFER, 0);
 
                 // If we get an error, stop and don't return the model - this should be very unlikely though
+                let error = gl::GetError();
+                if error != gl::NO_ERROR {
+                    return Err(error)
+                }
 
                 // Let's set the number of triangles this mesh has
                 curr_mesh.n_vertices = (mesh.verts.len()) as i32;
