@@ -1,11 +1,11 @@
 use gl::types::GLenum;
 use glam::Mat4;
-use glfw::{Action, Context, Glfw, Key, Window, WindowEvent};
-use std::{sync::mpsc::Receiver, mem::size_of, path::Path, fs::File, io::Read, f32::consts::PI};
+use glfw::{Context, Glfw, Window, WindowEvent};
+use std::{sync::mpsc::Receiver, mem::size_of, path::Path, fs::File, io::Read, f32::consts::PI, ffi::c_void};
 use queues::{queue, Queue, IsQueue};
 use memoffset::offset_of;
 
-use crate::{structs::{Vertex, Transform}, mesh::Model};
+use crate::{structs::{Vertex, Transform}, mesh::Model, input::UserInput, camera::Camera};
 
 pub struct Renderer {
     // Window stuff
@@ -106,16 +106,16 @@ impl Renderer {
         self.window.should_close()
     }
 
-    pub fn update_camera(&mut self, camera_transform: &Transform) {
+    pub fn update_camera(&mut self, camera: &Camera) {
         // Update CPU-side buffer
-        let view_matrix = Mat4::from_rotation_translation(camera_transform.rotation, camera_transform.translation);
+        let view_matrix = camera.transform.view_matrix();
         let proj_matrix = Mat4::perspective_rh(PI / 4.0, 16.0 / 9.0, 0.1, 1000.0);
         self.const_buffer_cpu.view_projection_matrix = proj_matrix * view_matrix;
 
         // Update GPU-side buffer
         unsafe {
             gl::BindBuffer(gl::UNIFORM_BUFFER, self.const_buffer_gpu);
-            gl::BufferData(gl::UNIFORM_BUFFER, size_of::<GlobalConstBuffer>() as isize, std::mem::transmute(&self.const_buffer_cpu), gl::STATIC_DRAW);
+            gl::BufferData(gl::UNIFORM_BUFFER, size_of::<GlobalConstBuffer>() as isize, &self.const_buffer_cpu as *const GlobalConstBuffer as *const c_void, gl::STATIC_DRAW);
             gl::BindBuffer(gl::UNIFORM_BUFFER, 0);
         }
     }
@@ -156,13 +156,15 @@ impl Renderer {
 
         // Swap front and back buffers
         self.window.swap_buffers();
+    }
 
+    pub fn update_input(&mut self, input: &mut UserInput) {
         // Poll for and process events
         self.glfw.poll_events();
         for (_, event) in glfw::flush_messages(&self.events) {
             println!("{:?}", event);
-            if let glfw::WindowEvent::Key(Key::Escape, _, Action::Press, _) = event {
-                self.window.set_should_close(true)
+            if let glfw::WindowEvent::Key(_, _, _, _) = event {
+                input.process_event(&event);
             }
         }
     }
@@ -203,7 +205,7 @@ impl Renderer {
                 gl::EnableVertexAttribArray(5);
 
                 // Populate vertex buffer
-                gl::BufferData(gl::ARRAY_BUFFER, (size_of::<Vertex>() * mesh.verts.len()) as isize, std::mem::transmute(&mesh.verts[0]), gl::STATIC_DRAW);
+                gl::BufferData(gl::ARRAY_BUFFER, (size_of::<Vertex>() * mesh.verts.len()) as isize, &mesh.verts[0] as *const Vertex as *const c_void, gl::STATIC_DRAW);
                
                 // Unbind buffer
                 gl::BindVertexArray(0);
