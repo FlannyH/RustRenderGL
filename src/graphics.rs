@@ -142,25 +142,13 @@ impl Renderer {
 
             // Let's put this on the GPU shall we
             unsafe {
-                let error = gl::GetError();
-                if error != gl::NO_ERROR {
-                    return Err(error)
-                }
                 // Create GPU buffers
                 gl::GenVertexArrays(1, &mut curr_mesh.vao);
                 gl::GenBuffers(1, &mut curr_mesh.vbo);
-                let error = gl::GetError();
-                if error != gl::NO_ERROR {
-                    return Err(error)
-                }
 
                 // Bind GPU buffers
                 gl::BindVertexArray(curr_mesh.vao);
                 gl::BindBuffer(gl::ARRAY_BUFFER , curr_mesh.vbo);
-                let error = gl::GetError();
-                if error != gl::NO_ERROR {
-                    return Err(error)
-                }
 
                 // Define vertex layout
                 gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, size_of::<Vertex>() as i32, offset_of!(Vertex, position) as *const _);
@@ -169,10 +157,6 @@ impl Renderer {
                 gl::VertexAttribPointer(3, 4, gl::FLOAT, gl::FALSE, size_of::<Vertex>() as i32, offset_of!(Vertex, colour) as *const _);
                 gl::VertexAttribPointer(4, 2, gl::FLOAT, gl::FALSE, size_of::<Vertex>() as i32, offset_of!(Vertex, uv0) as *const _);
                 gl::VertexAttribPointer(5, 2, gl::FLOAT, gl::FALSE, size_of::<Vertex>() as i32, offset_of!(Vertex, uv1) as *const _);
-                let error = gl::GetError();
-                if error != gl::NO_ERROR {
-                    return Err(error)
-                }
 
                 // Enable each attribute
                 gl::EnableVertexAttribArray(0);
@@ -181,31 +165,15 @@ impl Renderer {
                 gl::EnableVertexAttribArray(3);
                 gl::EnableVertexAttribArray(4);
                 gl::EnableVertexAttribArray(5);
-                let error = gl::GetError();
-                if error != gl::NO_ERROR {
-                    return Err(error)
-                }
 
                 // Populate vertex buffer
                 gl::BufferData(gl::ARRAY_BUFFER, (size_of::<Vertex>() * mesh.verts.len()) as isize, std::mem::transmute(&mesh.verts[0]), gl::STATIC_DRAW);
-                let error = gl::GetError();
-                if error != gl::NO_ERROR {
-                    return Err(error)
-                }
                
                 // Unbind buffer
                 gl::BindVertexArray(0);
                 gl::BindBuffer(gl::ARRAY_BUFFER, 0);
-                let error = gl::GetError();
-                if error != gl::NO_ERROR {
-                    return Err(error)
-                }
 
                 // If we get an error, stop and don't return the model - this should be very unlikely though
-                let error = gl::GetError();
-                if error != gl::NO_ERROR {
-                    return Err(error)
-                }
 
                 // Let's set the number of triangles this mesh has
                 curr_mesh.n_vertices = (mesh.verts.len()) as i32;
@@ -264,26 +232,14 @@ fn load_shader_part(shader_type: GLenum, path: &Path, program: u32) {
         let shader = gl::CreateShader(shader_type);
         gl::ShaderSource(shader, 1, &source.as_bytes().as_ptr().cast(), &source_len);
         gl::CompileShader(shader);
-        let error = gl::GetError();
-        if error != gl::NO_ERROR {
-           println!("254 {error}");
-        }
 
         // Check for errors
         let mut result = 0;
         let mut log_length = 0;
         gl::GetShaderiv(shader, gl::COMPILE_STATUS, &mut result);
         gl::GetShaderiv(shader, gl::INFO_LOG_LENGTH, &mut log_length);
-        let error = gl::GetError();
-        if error != gl::NO_ERROR {
-            println!("264 {error}");
-        }
         let mut error_message: Vec<u8> = vec![0; log_length as usize];
         gl::GetShaderInfoLog(shader, log_length, std::ptr::null_mut(), error_message.as_mut_ptr().cast());
-        let error = gl::GetError();
-        if error != gl::NO_ERROR {
-            println!("270 {error}");
-        }
         
         // Did we get an error?
         if log_length > 0 {
@@ -292,9 +248,5 @@ fn load_shader_part(shader_type: GLenum, path: &Path, program: u32) {
 
         // Attach to program
         gl::AttachShader(program, shader);
-        let error = gl::GetError();
-        if error != gl::NO_ERROR {
-            println!("283 {error}");
-        }
     }
 }
