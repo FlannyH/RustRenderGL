@@ -23,7 +23,7 @@ impl UserInput {
         }
 
         // Handle mouse buttons
-        if let glfw::WindowEvent::MouseButton(button, action, modifiers) = event {
+        if let glfw::WindowEvent::MouseButton(button, action, _) = event {
             self.mouse_button_state.insert(
                 *button as i32,
                 match action {

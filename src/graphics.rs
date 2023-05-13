@@ -4,11 +4,11 @@ use glfw::{Context, Glfw, Window, WindowEvent};
 use memoffset::offset_of;
 use queues::{queue, IsQueue, Queue};
 use std::{
-    cell::RefCell, f32::consts::PI, ffi::c_void, fs::File, io::Read, mem::size_of, path::Path,
-    rc::Rc, sync::mpsc::Receiver,
+    f32::consts::PI, ffi::c_void, fs::File, io::Read, mem::size_of, path::Path, sync::mpsc::Receiver, collections::{HashMap, hash_map::DefaultHasher}, hash::Hasher,
 };
+use std::hash::Hash;
 
-use crate::{camera::Camera, input::UserInput, resources::Resources, structs::Vertex};
+use crate::{camera::Camera, input::UserInput, structs::Vertex, mesh::Model};
 
 pub struct Renderer {
     // Window stuff
@@ -16,8 +16,8 @@ pub struct Renderer {
     window: Window,
     events: Receiver<(f64, WindowEvent)>,
 
-    // Reference to the resource manager, so we can use meshes and textures that were loaded there
-    resources: Rc<RefCell<Resources>>,
+    // Resources
+    models: HashMap<u64, Model>,
 
     // Mesh render queue
     mesh_queue: Queue<MeshQueueEntry>,
@@ -37,15 +37,6 @@ pub struct MeshQueueEntry {
     n_vertices: i32,
 }
 
-pub struct ModelGPU {
-    meshes: Vec<MeshQueueEntry>,
-}
-
-enum ShaderPart {
-    Vertex,
-    Fragment,
-}
-
 pub struct GlobalConstBuffer {
     view_projection_matrix: Mat4,
 }
@@ -55,7 +46,6 @@ impl Renderer {
         width: u32,
         height: u32,
         title: &str,
-        resources: Rc<RefCell<Resources>>,
     ) -> Result<Self, ()> {
         // Initialize GLFW
         let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
@@ -89,7 +79,7 @@ impl Renderer {
                 view_projection_matrix: Mat4::IDENTITY,
             },
             const_buffer_gpu: 0,
-            resources,
+            models: HashMap::new(),
         };
 
         // Load shaders
@@ -104,7 +94,7 @@ impl Renderer {
             gl::BufferData(
                 gl::UNIFORM_BUFFER,
                 size_of::<GlobalConstBuffer>() as isize,
-                std::mem::transmute(&renderer.const_buffer_cpu),
+                &renderer.const_buffer_cpu as *const GlobalConstBuffer as *const c_void,
                 gl::STATIC_DRAW,
             );
         }
@@ -181,16 +171,16 @@ impl Renderer {
         }
     }
 
-    pub fn upload_model(&self, model_id: &u64) -> Result<(), u32> {
-        // Find mesh from resources
-        let mut binding = self.resources.borrow_mut();
-        let model_cpu = binding.models.get_mut(&model_id);
-        if model_cpu.is_none() {
-            return Err(0);
+    pub fn load_model(&mut self, path: &Path) -> Result<u64, u32> {
+        // Try to load model
+        let model = Model::load_gltf(path);
+        if model.is_err() {
+            println!("Error loading model: {}", model.err().unwrap());
+            return Err(0)
         }
-        let model_cpu = model_cpu.unwrap();
+        let mut model_cpu = model.unwrap();
 
-        // For each submesh in the model
+        // Upload each submesh in the model to OpenGL
         for (name, mesh) in &mut model_cpu.meshes {
             println!("Parsing mesh \"{name}\"");
 
@@ -281,32 +271,36 @@ impl Renderer {
                 }
             }
         }
-        Ok(())
+
+        // Calculate hash
+        let mut s = DefaultHasher::new();
+        path.hash(&mut s);
+        let hash_id = s.finish();
+
+        // Insert model in to model map
+        self.models.insert(hash_id, model_cpu);
+
+        // Return the handle
+        Ok(hash_id)
     }
 
     pub fn draw_model(&mut self, model_id: &u64) {
         // Render each mesh separately
-        let binding = self.resources.borrow();
-        if let Some(model_gpu) = binding.models.get(&model_id) {
-            for (_, mesh) in &model_gpu.meshes {
-                self.mesh_queue
-                    .add(MeshQueueEntry {
-                        vao: mesh.vao,
-                        vbo: mesh.vbo,
-                        n_vertices: mesh.verts.len() as i32,
-                    })
-                    .expect("Failed to add mesh to mesh queue");
-            }
+        if !self.models.contains_key(model_id) {
+            return;
+        }
+        for mesh in self.models.get(model_id).unwrap().meshes.values() {
+            self.mesh_queue
+                .add(MeshQueueEntry {
+                    vao: mesh.vao,
+                    vbo: mesh.vbo,
+                    n_vertices: mesh.verts.len() as i32,
+                })
+                .expect("Failed to add mesh to mesh queue");
         }
     }
 
     pub fn load_shader(&mut self, path: &Path) -> Result<u32, &str> {
-        // Strip out file name
-        let file_name = match path.file_name() {
-            Some(name) => name,
-            None => return Err("Failed to load shader!"),
-        };
-
         // Create shader program object
         let program;
         unsafe {
@@ -331,7 +325,6 @@ impl Renderer {
         Ok(program)
     }
 }
-
 fn load_shader_part(shader_type: GLenum, path: &Path, program: u32) {
     // Load shader source
     let mut file = File::open(path).expect("Failed to open shader file");

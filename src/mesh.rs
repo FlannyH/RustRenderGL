@@ -294,12 +294,12 @@ impl Model {
 
         // Get all the textures from the GLTF
         for material in gltf_document.materials() {
-            let mut _new_material = Material::new(); // this is unused for now
+            let mut new_material = Material::new(); // this is unused for now
 
             // Get PBR parameters
-            let scl_rgh: f32 = material.pbr_metallic_roughness().roughness_factor();
-            let scl_mtl: f32 = material.pbr_metallic_roughness().metallic_factor();
-            let scl_emm: Vec3 = material.emissive_factor().into();
+            new_material.scl_rgh = material.pbr_metallic_roughness().roughness_factor();
+            new_material.scl_mtl = material.pbr_metallic_roughness().metallic_factor();
+            new_material.scl_emm = material.emissive_factor().into();
 
             // Try to find textures
             let tex_info_alb = material.pbr_metallic_roughness().base_color_texture();
@@ -316,7 +316,7 @@ impl Model {
 
             model.materials.insert(
                 String::from(material.name().unwrap_or("untitled")),
-                _new_material,
+                new_material,
             );
         }
         Ok(model)
