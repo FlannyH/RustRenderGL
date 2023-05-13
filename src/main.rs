@@ -1,12 +1,12 @@
 #![allow(clippy::identity_op, dead_code, unused_variables)]
 
+mod camera;
 mod graphics;
 mod helpers;
+mod input;
 mod mesh;
 mod structs;
 mod texture;
-mod camera;
-mod input;
 use std::path::Path;
 
 use camera::Camera;
@@ -17,7 +17,8 @@ use structs::Transform;
 
 fn main() {
     // Create renderer and input
-    let mut renderer = Renderer::new(1280, 720, "FlanRustRenderer (OpenGL)").expect("Failed to initialize renderer");
+    let mut renderer = Renderer::new(1280, 720, "FlanRustRenderer (OpenGL)")
+        .expect("Failed to initialize renderer");
     let mut user_input = UserInput::new();
 
     // todo: implement source-style error model in code, for when a mesh isn't there
@@ -30,7 +31,9 @@ fn main() {
     };
 
     // Upload the mesh to the GPU
-    let model_spyro_gpu = renderer.upload_model(&model_spyro_cpu).expect("Failed to upload model!");
+    let model_spyro_gpu = renderer
+        .upload_model(&model_spyro_cpu)
+        .expect("Failed to upload model!");
 
     // Create a camera
     let mut camera = Camera::new(
@@ -42,7 +45,6 @@ fn main() {
         5.0,
         0.005,
     );
-    
 
     // Main loop
     while !renderer.should_close() {

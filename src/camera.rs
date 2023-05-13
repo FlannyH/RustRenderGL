@@ -1,6 +1,8 @@
-use glfw::Key;
+use std::f32::consts::PI;
 
-use crate::{structs::Transform, input::UserInput};
+use glfw::{Key, MouseButton};
+
+use crate::{input::UserInput, structs::Transform};
 
 pub struct Camera {
     pub transform: Transform,
@@ -13,11 +15,7 @@ pub struct Camera {
 }
 
 impl Camera {
-    pub fn new(
-        transform: Transform,
-        move_speed: f32,
-        mouse_sensitivity: f32,
-    ) -> Self {
+    pub fn new(transform: Transform, move_speed: f32, mouse_sensitivity: f32) -> Self {
         Camera {
             transform,
             move_speed,
@@ -51,17 +49,13 @@ impl Camera {
             self.transform.translation -= self.move_speed * delta_time * glam::vec3(0.0, 1.0, 0.0);
         }
 
-/*
         // Movement speed increase, like in Minecraft spectator mode
-        if let Some(result) = input.get_scroll_wheel() {
-            let (_x, y) = result;
-            self.move_speed *= 1.005_f32.powf(y);
-        }
+        self.move_speed *= 1.005_f32.powf(input.get_scroll_wheel());
 
         // Mouse rotation
-        if input.get_mouse_down(MouseButton::Right) {
+        if input.get_mouse_down(MouseButton::Button1) {
             // Update mouse position
-            let mouse_pos = input.get_mouse_pos(MouseMode::Pass).unwrap();
+            let mouse_pos = input.get_mouse_pos();
             let delta_mouse = (
                 mouse_pos.0 - self.mouse_pos_old.0,
                 mouse_pos.1 - self.mouse_pos_old.1,
@@ -81,6 +75,5 @@ impl Camera {
         } else {
             self.should_skip_mouse_update = true;
         }
-        */
     }
 }
