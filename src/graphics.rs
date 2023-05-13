@@ -1,8 +1,10 @@
+use gl::types::GLenum;
 use glfw::{Action, Context, Glfw, Key, Window, WindowEvent};
-use std::{sync::mpsc::Receiver, mem::size_of};
+use std::{sync::mpsc::Receiver, mem::size_of, path::Path, fs::File, io::Read};
 use queues::{queue, Queue, IsQueue};
+use memoffset::offset_of;
 
-use crate::{structs::Vertex};
+use crate::{structs::Vertex, mesh::Model};
 
 pub struct Renderer {
     // Window stuff
@@ -11,14 +13,17 @@ pub struct Renderer {
     events: Receiver<(f64, WindowEvent)>,
 
     // Mesh render queue
-    mesh_queue: Queue<MeshGPU>
+    mesh_queue: Queue<MeshGPU>,
+
+    // Main triangle shader
+    triangle_shader: u32,
 }
 
 #[derive(Clone)]
 pub struct MeshGPU {
     vao: u32,
     vbo: u32,
-    n_triangles: i32
+    n_vertices: i32
 }
 
 impl MeshGPU {
@@ -26,7 +31,7 @@ impl MeshGPU {
         MeshGPU {
             vao: 0,
             vbo: 0,
-            n_triangles: 0,
+            n_vertices: 0,
         }
     }
 }
@@ -35,8 +40,13 @@ pub struct ModelGPU {
     meshes: Vec<MeshGPU>,
 }
 
+enum ShaderPart {
+    Vertex,
+    Fragment,
+}
+
 impl Renderer {
-    pub fn new(width: u32, height: u32, title: &str) -> Self {
+    pub fn new(width: u32, height: u32, title: &str) -> Result<Self, &str> {
         // Initialize GLFW
         let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
@@ -51,14 +61,27 @@ impl Renderer {
 
         // Init OpenGL
         gl::load_with(|f_name| glfw.get_proc_address_raw(f_name));
+        unsafe {
+            let error = gl::GetError();
+            if error != gl::NO_ERROR {
+                return Err("Error {error} occured when initializing OpenGL!")
+            }
+        }
 
-        // Return a new renderer object
-        Renderer {
+        // Create renderer
+        let mut renderer = Renderer {
             glfw,
             window,
             events,
             mesh_queue: queue![],
-        }
+            triangle_shader: 0,
+        };
+
+        // Load shaders
+        renderer.triangle_shader = renderer.load_shader(Path::new("assets/shaders/lit")).expect("Shader loading failed!");
+
+        // Return a new renderer object
+        Ok(renderer)
     }
 
     pub fn should_close(&self) -> bool {
@@ -78,6 +101,7 @@ impl Renderer {
         unsafe {
             gl::Enable(gl::DEPTH_TEST);
             gl::Enable(gl::CULL_FACE);
+            gl::UseProgram(self.triangle_shader);
         }
 
         // Render mesh queue
@@ -89,7 +113,7 @@ impl Renderer {
                 gl::BindBuffer(gl::ARRAY_BUFFER, mesh.vbo);
     
                 // Draw the model
-                gl::DrawArrays(gl::TRIANGLES, 0, mesh.n_triangles);
+                gl::DrawArrays(gl::TRIANGLES, 0, mesh.n_vertices);
             }
         }
         
@@ -107,32 +131,48 @@ impl Renderer {
         }
     }
 
-    pub fn upload_model(&self, model_cpu: crate::mesh::Model) -> Result<ModelGPU, u32> {
+    pub fn upload_model(&self, model_cpu: &Model) -> Result<ModelGPU, u32> {
         let mut model_gpu = ModelGPU { meshes: Vec::new() };
 
         // For each submesh in the model
-        for (name, mesh) in model_cpu.meshes {
+        for (name, mesh) in &model_cpu.meshes {
             println!("Parsing mesh \"{name}\"");
             // Create a new mesh entry in the model_gpu object
             let mut curr_mesh = MeshGPU::new();
 
             // Let's put this on the GPU shall we
             unsafe {
+                let error = gl::GetError();
+                if error != gl::NO_ERROR {
+                    return Err(error)
+                }
                 // Create GPU buffers
-                gl::GenVertexArrays(1, &mut curr_mesh.vao as *mut u32);
-                gl::GenBuffers(1, &mut curr_mesh.vbo as *mut u32);
+                gl::GenVertexArrays(1, &mut curr_mesh.vao);
+                gl::GenBuffers(1, &mut curr_mesh.vbo);
+                let error = gl::GetError();
+                if error != gl::NO_ERROR {
+                    return Err(error)
+                }
 
                 // Bind GPU buffers
                 gl::BindVertexArray(curr_mesh.vao);
                 gl::BindBuffer(gl::ARRAY_BUFFER , curr_mesh.vbo);
+                let error = gl::GetError();
+                if error != gl::NO_ERROR {
+                    return Err(error)
+                }
 
                 // Define vertex layout
-                gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, size_of::<Vertex>() as i32, std::mem::transmute(mesh.verts.as_ptr()));
-                gl::VertexAttribPointer(1, 3, gl::FLOAT, gl::TRUE,  size_of::<Vertex>() as i32, std::mem::transmute(mesh.verts.as_ptr()));
-                gl::VertexAttribPointer(2, 4, gl::FLOAT, gl::FALSE, size_of::<Vertex>() as i32, std::mem::transmute(mesh.verts.as_ptr()));
-                gl::VertexAttribPointer(3, 4, gl::FLOAT, gl::FALSE, size_of::<Vertex>() as i32, std::mem::transmute(mesh.verts.as_ptr()));
-                gl::VertexAttribPointer(4, 2, gl::FLOAT, gl::FALSE, size_of::<Vertex>() as i32, std::mem::transmute(mesh.verts.as_ptr()));
-                gl::VertexAttribPointer(5, 2, gl::FLOAT, gl::FALSE, size_of::<Vertex>() as i32, std::mem::transmute(mesh.verts.as_ptr()));
+                gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, size_of::<Vertex>() as i32, offset_of!(Vertex, position) as *const _);
+                gl::VertexAttribPointer(1, 3, gl::FLOAT, gl::TRUE,  size_of::<Vertex>() as i32, offset_of!(Vertex, normal) as *const _);
+                gl::VertexAttribPointer(2, 4, gl::FLOAT, gl::FALSE, size_of::<Vertex>() as i32, offset_of!(Vertex, tangent) as *const _);
+                gl::VertexAttribPointer(3, 4, gl::FLOAT, gl::FALSE, size_of::<Vertex>() as i32, offset_of!(Vertex, colour) as *const _);
+                gl::VertexAttribPointer(4, 2, gl::FLOAT, gl::FALSE, size_of::<Vertex>() as i32, offset_of!(Vertex, uv0) as *const _);
+                gl::VertexAttribPointer(5, 2, gl::FLOAT, gl::FALSE, size_of::<Vertex>() as i32, offset_of!(Vertex, uv1) as *const _);
+                let error = gl::GetError();
+                if error != gl::NO_ERROR {
+                    return Err(error)
+                }
 
                 // Enable each attribute
                 gl::EnableVertexAttribArray(0);
@@ -141,13 +181,25 @@ impl Renderer {
                 gl::EnableVertexAttribArray(3);
                 gl::EnableVertexAttribArray(4);
                 gl::EnableVertexAttribArray(5);
+                let error = gl::GetError();
+                if error != gl::NO_ERROR {
+                    return Err(error)
+                }
 
                 // Populate vertex buffer
-                gl::BufferData(gl::ARRAY_BUFFER, (size_of::<Vertex>() * mesh.verts.len()) as isize, std::mem::transmute(mesh.verts.as_ptr()), gl::STATIC_DRAW);
+                gl::BufferData(gl::ARRAY_BUFFER, (size_of::<Vertex>() * mesh.verts.len()) as isize, std::mem::transmute(&mesh.verts[0]), gl::STATIC_DRAW);
+                let error = gl::GetError();
+                if error != gl::NO_ERROR {
+                    return Err(error)
+                }
                
                 // Unbind buffer
                 gl::BindVertexArray(0);
                 gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+                let error = gl::GetError();
+                if error != gl::NO_ERROR {
+                    return Err(error)
+                }
 
                 // If we get an error, stop and don't return the model - this should be very unlikely though
                 let error = gl::GetError();
@@ -156,7 +208,7 @@ impl Renderer {
                 }
 
                 // Let's set the number of triangles this mesh has
-                curr_mesh.n_triangles = (mesh.verts.len() / 3) as i32;
+                curr_mesh.n_vertices = (mesh.verts.len()) as i32;
             }
 
             // Add this mesh to the model_gpu object
@@ -174,5 +226,75 @@ impl Renderer {
 
     pub fn draw_mesh(&mut self, mesh: &MeshGPU) {
         self.mesh_queue.add(mesh.clone()).expect("Failed to add mesh to mesh queue");
+    }
+
+    pub fn load_shader(&mut self, path: &Path) -> Result<u32, &str> {
+        // Strip out file name
+        let file_name = match path.file_name() {
+            Some(name) => name,
+            None => return Err("Failed to load shader!")
+        };
+
+        // Create shader program object
+        let program;
+        unsafe {
+            program = gl::CreateProgram();
+        }
+
+        // Load and compile shader parts
+        load_shader_part(gl::VERTEX_SHADER, path.with_extension("vert").as_path(), program);
+        load_shader_part(gl::FRAGMENT_SHADER, path.with_extension("frag").as_path(), program);
+        unsafe {
+            gl::LinkProgram(program);
+        }
+
+        Ok(program)
+    }
+}
+
+fn load_shader_part(shader_type: GLenum, path: &Path, program: u32) {
+    // Load shader source
+    let mut file = File::open(path).expect("Failed to open shader file");
+    let mut source = String::new();
+    file.read_to_string(&mut source).expect("Failed to read file");
+    let source_len = source.len() as i32;
+    
+    unsafe {
+        // Create shader part 
+        let shader = gl::CreateShader(shader_type);
+        gl::ShaderSource(shader, 1, &source.as_bytes().as_ptr().cast(), &source_len);
+        gl::CompileShader(shader);
+        let error = gl::GetError();
+        if error != gl::NO_ERROR {
+           println!("254 {error}");
+        }
+
+        // Check for errors
+        let mut result = 0;
+        let mut log_length = 0;
+        gl::GetShaderiv(shader, gl::COMPILE_STATUS, &mut result);
+        gl::GetShaderiv(shader, gl::INFO_LOG_LENGTH, &mut log_length);
+        let error = gl::GetError();
+        if error != gl::NO_ERROR {
+            println!("264 {error}");
+        }
+        let mut error_message: Vec<u8> = vec![0; log_length as usize];
+        gl::GetShaderInfoLog(shader, log_length, std::ptr::null_mut(), error_message.as_mut_ptr().cast());
+        let error = gl::GetError();
+        if error != gl::NO_ERROR {
+            println!("270 {error}");
+        }
+        
+        // Did we get an error?
+        if log_length > 0 {
+            println!("Shader compilation error!\n{}", std::str::from_utf8(error_message.as_slice()).unwrap())
+        }
+
+        // Attach to program
+        gl::AttachShader(program, shader);
+        let error = gl::GetError();
+        if error != gl::NO_ERROR {
+            println!("283 {error}");
+        }
     }
 }
