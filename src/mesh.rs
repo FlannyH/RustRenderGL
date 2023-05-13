@@ -1,17 +1,15 @@
-use std::{collections::HashMap, path::Path};
-
+use crate::material::Material;
+use crate::structs::Transform;
+use crate::{structs::Vertex, texture::Texture};
 use glam::Vec4Swizzles;
 use glam::{Mat4, Vec2, Vec3, Vec4};
-
 use gltf::buffer::Data;
-use gltf::texture::{MagFilter, MinFilter, WrappingMode};
-
-use crate::structs::Transform;
-use crate::texture::{FilterMode, Material, Sampler, WrapMode};
-use crate::{structs::Vertex, texture::Texture};
+use std::{collections::HashMap, path::Path};
 
 pub struct Mesh {
     pub verts: Vec<Vertex>,
+    pub vao: u32,
+    pub vbo: u32,
 }
 
 pub struct Model {
@@ -167,7 +165,11 @@ fn create_vertex_array(
     }
 
     // Create vertex array
-    let mut mesh_out = Mesh { verts: Vec::new() };
+    let mut mesh_out = Mesh {
+        verts: Vec::new(),
+        vao: 0,
+        vbo: 0,
+    };
     for index in indices {
         let mut vertex = Vertex {
             position: Vec3::new(0., 0., 0.),
@@ -292,103 +294,24 @@ impl Model {
 
         // Get all the textures from the GLTF
         for material in gltf_document.materials() {
-            let _new_material; // this is unused for now
+            let mut _new_material = Material::new(); // this is unused for now
 
-            // Get the base texture info
-            let gltf_tex_info = material.pbr_metallic_roughness().base_color_texture();
+            // Get PBR parameters
+            let scl_rgh: f32 = material.pbr_metallic_roughness().roughness_factor();
+            let scl_mtl: f32 = material.pbr_metallic_roughness().metallic_factor();
+            let scl_emm: Vec3 = material.emissive_factor().into();
 
-            let tex;
-            // If there is a base texture, load it
-            if let Some(gltf_tex_info_unwrapped) = gltf_tex_info {
-                // Get image index
-                let gltf_tex = gltf_tex_info_unwrapped.texture().source().index();
+            // Try to find textures
+            let tex_info_alb = material.pbr_metallic_roughness().base_color_texture();
+            let tex_info_mtl_rgh = material
+                .pbr_metallic_roughness()
+                .metallic_roughness_texture();
+            let tex_info_nrm = material.normal_texture();
+            let tex_info_emm = material.emissive_texture();
 
-                // Get image data
-                let image = &image_data[gltf_tex];
-
-                // Load the texture from that image data
-                tex = Texture::load_texture_from_gltf_image(image);
-
-                // Get sampler mode
-                let gltf_sampler = gltf_tex_info_unwrapped.texture().sampler();
-                let new_sampler = Sampler {
-                    filter_mode_mag: match gltf_sampler.mag_filter().unwrap_or(MagFilter::Linear) {
-                        MagFilter::Nearest => FilterMode::Point,
-                        MagFilter::Linear => FilterMode::Linear,
-                    },
-                    filter_mode_min: match gltf_sampler
-                        .min_filter()
-                        .unwrap_or(MinFilter::LinearMipmapLinear)
-                    {
-                        MinFilter::Nearest
-                        | MinFilter::NearestMipmapLinear
-                        | MinFilter::NearestMipmapNearest => FilterMode::Point,
-                        MinFilter::Linear
-                        | MinFilter::LinearMipmapLinear
-                        | MinFilter::LinearMipmapNearest => FilterMode::Linear,
-                    },
-                    wrap_mode_s: match gltf_sampler.wrap_s() {
-                        WrappingMode::ClampToEdge => WrapMode::Clamp,
-                        WrappingMode::MirroredRepeat => WrapMode::Mirror,
-                        WrappingMode::Repeat => WrapMode::Repeat,
-                    },
-                    wrap_mode_t: match gltf_sampler.wrap_t() {
-                        WrappingMode::ClampToEdge => WrapMode::Clamp,
-                        WrappingMode::MirroredRepeat => WrapMode::Mirror,
-                        WrappingMode::Repeat => WrapMode::Repeat,
-                    },
-                    filter_mode_mipmap: match gltf_sampler
-                        .min_filter()
-                        .unwrap_or(MinFilter::LinearMipmapLinear)
-                    {
-                        MinFilter::Nearest | MinFilter::Linear => FilterMode::Point,
-                        MinFilter::NearestMipmapNearest | MinFilter::LinearMipmapNearest => {
-                            FilterMode::Linear
-                        }
-                        MinFilter::NearestMipmapLinear | MinFilter::LinearMipmapLinear => {
-                            FilterMode::Linear
-                        }
-                    },
-                    mipmap_enabled: match gltf_sampler
-                        .min_filter()
-                        .unwrap_or(MinFilter::LinearMipmapLinear)
-                    {
-                        MinFilter::Nearest | MinFilter::Linear => false,
-                        MinFilter::NearestMipmapNearest | MinFilter::LinearMipmapNearest => true,
-                        MinFilter::NearestMipmapLinear | MinFilter::LinearMipmapLinear => true,
-                    },
-                };
-
-                _new_material = Material {
-                    texture: tex,
-                    sampler: new_sampler,
-                };
-                println!(
-                    "Found texture '{}' ({}x{})",
-                    material.name().unwrap_or(""),
-                    _new_material.texture.width,
-                    _new_material.texture.height
-                )
-            }
-            // If there is no base texture, generate a white one
-            else {
-                _new_material = Material {
-                    texture: Texture {
-                        width: 64,
-                        height: 64,
-                        depth: 1,
-                        data: vec![0xFFFFFFFFu32; 64 * 64],
-                        mipmap_offsets: vec![0usize; 1],
-                    },
-                    sampler: Sampler {
-                        filter_mode_mag: FilterMode::Point,
-                        filter_mode_min: FilterMode::Point,
-                        filter_mode_mipmap: FilterMode::Point,
-                        wrap_mode_s: WrapMode::Clamp,
-                        wrap_mode_t: WrapMode::Clamp,
-                        mipmap_enabled: false,
-                    },
-                };
+            // Get the texture data
+            if let Some(tex) = tex_info_alb {
+                Texture::load_texture_from_gltf_image(&image_data[tex.texture().source().index()]);
             }
 
             model.materials.insert(

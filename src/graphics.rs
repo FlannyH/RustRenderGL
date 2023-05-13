@@ -4,11 +4,11 @@ use glfw::{Context, Glfw, Window, WindowEvent};
 use memoffset::offset_of;
 use queues::{queue, IsQueue, Queue};
 use std::{
-    f32::consts::PI, ffi::c_void, fs::File, io::Read, mem::size_of, path::Path,
-    sync::mpsc::Receiver,
+    cell::RefCell, f32::consts::PI, ffi::c_void, fs::File, io::Read, mem::size_of, path::Path,
+    rc::Rc, sync::mpsc::Receiver,
 };
 
-use crate::{camera::Camera, input::UserInput, mesh::Model, structs::Vertex};
+use crate::{camera::Camera, input::UserInput, resources::Resources, structs::Vertex};
 
 pub struct Renderer {
     // Window stuff
@@ -16,8 +16,11 @@ pub struct Renderer {
     window: Window,
     events: Receiver<(f64, WindowEvent)>,
 
+    // Reference to the resource manager, so we can use meshes and textures that were loaded there
+    resources: Rc<RefCell<Resources>>,
+
     // Mesh render queue
-    mesh_queue: Queue<MeshGPU>,
+    mesh_queue: Queue<MeshQueueEntry>,
 
     // Main triangle shader
     triangle_shader: u32,
@@ -28,24 +31,14 @@ pub struct Renderer {
 }
 
 #[derive(Clone)]
-pub struct MeshGPU {
+pub struct MeshQueueEntry {
     vao: u32,
     vbo: u32,
     n_vertices: i32,
 }
 
-impl MeshGPU {
-    pub fn new() -> Self {
-        MeshGPU {
-            vao: 0,
-            vbo: 0,
-            n_vertices: 0,
-        }
-    }
-}
-
 pub struct ModelGPU {
-    meshes: Vec<MeshGPU>,
+    meshes: Vec<MeshQueueEntry>,
 }
 
 enum ShaderPart {
@@ -58,7 +51,12 @@ pub struct GlobalConstBuffer {
 }
 
 impl Renderer {
-    pub fn new(width: u32, height: u32, title: &str) -> Result<Self, &str> {
+    pub fn new(
+        width: u32,
+        height: u32,
+        title: &str,
+        resources: Rc<RefCell<Resources>>,
+    ) -> Result<Self, ()> {
         // Initialize GLFW
         let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
 
@@ -76,7 +74,7 @@ impl Renderer {
         unsafe {
             let error = gl::GetError();
             if error != gl::NO_ERROR {
-                return Err("Error {error} occured when initializing OpenGL!");
+                return Err(());
             }
         }
 
@@ -91,6 +89,7 @@ impl Renderer {
                 view_projection_matrix: Mat4::IDENTITY,
             },
             const_buffer_gpu: 0,
+            resources,
         };
 
         // Load shaders
@@ -182,24 +181,28 @@ impl Renderer {
         }
     }
 
-    pub fn upload_model(&self, model_cpu: &Model) -> Result<ModelGPU, u32> {
-        let mut model_gpu = ModelGPU { meshes: Vec::new() };
+    pub fn upload_model(&self, model_id: &u64) -> Result<(), u32> {
+        // Find mesh from resources
+        let mut binding = self.resources.borrow_mut();
+        let model_cpu = binding.models.get_mut(&model_id);
+        if model_cpu.is_none() {
+            return Err(0);
+        }
+        let model_cpu = model_cpu.unwrap();
 
         // For each submesh in the model
-        for (name, mesh) in &model_cpu.meshes {
+        for (name, mesh) in &mut model_cpu.meshes {
             println!("Parsing mesh \"{name}\"");
-            // Create a new mesh entry in the model_gpu object
-            let mut curr_mesh = MeshGPU::new();
 
             // Let's put this on the GPU shall we
             unsafe {
                 // Create GPU buffers
-                gl::GenVertexArrays(1, &mut curr_mesh.vao);
-                gl::GenBuffers(1, &mut curr_mesh.vbo);
+                gl::GenVertexArrays(1, &mut mesh.vao);
+                gl::GenBuffers(1, &mut mesh.vbo);
 
                 // Bind GPU buffers
-                gl::BindVertexArray(curr_mesh.vao);
-                gl::BindBuffer(gl::ARRAY_BUFFER, curr_mesh.vbo);
+                gl::BindVertexArray(mesh.vao);
+                gl::BindBuffer(gl::ARRAY_BUFFER, mesh.vbo);
 
                 // Define vertex layout
                 gl::VertexAttribPointer(
@@ -276,28 +279,25 @@ impl Renderer {
                 if error != gl::NO_ERROR {
                     return Err(error);
                 }
-
-                // Let's set the number of triangles this mesh has
-                curr_mesh.n_vertices = (mesh.verts.len()) as i32;
             }
-
-            // Add this mesh to the model_gpu object
-            model_gpu.meshes.push(curr_mesh);
         }
-        Ok(model_gpu)
+        Ok(())
     }
 
-    pub fn draw_model(&mut self, model_gpu: &ModelGPU) {
+    pub fn draw_model(&mut self, model_id: &u64) {
         // Render each mesh separately
-        for mesh in &model_gpu.meshes {
-            self.draw_mesh(mesh);
+        let binding = self.resources.borrow();
+        if let Some(model_gpu) = binding.models.get(&model_id) {
+            for (_, mesh) in &model_gpu.meshes {
+                self.mesh_queue
+                    .add(MeshQueueEntry {
+                        vao: mesh.vao,
+                        vbo: mesh.vbo,
+                        n_vertices: mesh.verts.len() as i32,
+                    })
+                    .expect("Failed to add mesh to mesh queue");
+            }
         }
-    }
-
-    pub fn draw_mesh(&mut self, mesh: &MeshGPU) {
-        self.mesh_queue
-            .add(mesh.clone())
-            .expect("Failed to add mesh to mesh queue");
     }
 
     pub fn load_shader(&mut self, path: &Path) -> Result<u32, &str> {

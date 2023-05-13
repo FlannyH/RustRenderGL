@@ -4,35 +4,41 @@ mod camera;
 mod graphics;
 mod helpers;
 mod input;
+mod material;
 mod mesh;
+mod resources;
 mod structs;
 mod texture;
-use std::path::Path;
+use std::{cell::RefCell, path::Path, rc::Rc};
 
 use camera::Camera;
 use graphics::Renderer;
 use input::UserInput;
-use mesh::Model;
+use resources::Resources;
 use structs::Transform;
 
 fn main() {
     // Create renderer and input
-    let mut renderer = Renderer::new(1280, 720, "FlanRustRenderer (OpenGL)")
-        .expect("Failed to initialize renderer");
+    let resources = Rc::new(RefCell::new(Resources::new()));
+    let renderer = Rc::new(RefCell::new(
+        Renderer::new(1280, 720, "FlanRustRenderer (OpenGL)", resources.clone())
+            .expect("Failed to initialize renderer"),
+    ));
     let mut user_input = UserInput::new();
 
     // todo: implement source-style error model in code, for when a mesh isn't there
-    let model_spyro_cpu = match Model::load_gltf(Path::new("assets/models/spyro.gltf")) {
-        Ok(model) => model,
-        Err(err) => {
-            println!("{}", err);
-            Model::new()
-        }
-    };
+    let model_spyro = resources
+        .borrow_mut()
+        .load_model(Path::new("assets/models/spyro.gltf"))
+        .unwrap_or_else(|_| {
+            println!("Model not found!");
+            0
+        });
 
     // Upload the mesh to the GPU
-    let model_spyro_gpu = renderer
-        .upload_model(&model_spyro_cpu)
+    renderer
+        .borrow_mut()
+        .upload_model(&model_spyro)
         .expect("Failed to upload model!");
 
     // Create a camera
@@ -47,13 +53,16 @@ fn main() {
     );
 
     // Main loop
-    while !renderer.should_close() {
-        renderer.update_input(&mut user_input);
+    loop {
+        let mut renderer_ref = renderer.borrow_mut();
+        if renderer_ref.should_close() {
+            break;
+        }
+        renderer_ref.update_input(&mut user_input);
         camera.update(&user_input, 0.016);
-        renderer.update_camera(&camera);
-        renderer.begin_frame();
-        renderer.draw_model(&model_spyro_gpu);
-        renderer.end_frame();
-        println!("{}", camera.transform.translation);
+        renderer_ref.update_camera(&camera);
+        renderer_ref.begin_frame();
+        renderer_ref.draw_model(&model_spyro);
+        renderer_ref.end_frame();
     }
 }

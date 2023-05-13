@@ -2,11 +2,11 @@ use crate::helpers::*;
 use std::path::Path;
 
 pub struct Texture {
+    pub gl_id: u32,
     pub width: usize,
     pub height: usize,
     pub depth: usize,
     pub data: Vec<u32>,
-    pub mipmap_offsets: Vec<usize>,
 }
 
 #[derive(PartialEq)]
@@ -28,11 +28,6 @@ pub struct Sampler {
     pub wrap_mode_s: WrapMode,
     pub wrap_mode_t: WrapMode,
     pub mipmap_enabled: bool,
-}
-
-pub struct Material {
-    pub texture: Texture,
-    pub sampler: Sampler,
 }
 
 #[derive(Clone)]
@@ -63,11 +58,11 @@ impl Texture {
                     })
                     .collect();
                 Self {
+                    gl_id: 0,
                     width: image.width,
                     height: image.height,
                     depth: image.depth,
                     data,
-                    mipmap_offsets: vec![0; 1],
                 }
             } else if image.depth == 3 {
                 let data = (0..image.data.len() / 3)
@@ -81,11 +76,11 @@ impl Texture {
                     })
                     .collect();
                 Self {
+                    gl_id: 0,
                     width: image.width,
                     height: image.height,
                     depth: image.depth,
                     data,
-                    mipmap_offsets: vec![0; 1],
                 }
             } else {
                 panic!("Unsupported texture type");
@@ -135,6 +130,7 @@ impl Texture {
             _ => panic!("Texture format unsupported!"),
         };
         Texture {
+            gl_id: 0,
             width: image.width as usize,
             height: image.height as usize,
             depth: 4,
@@ -166,7 +162,6 @@ impl Texture {
                 }
                 data
             },
-            mipmap_offsets: vec![0; 1],
         }
     }
 }
