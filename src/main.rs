@@ -7,8 +7,10 @@ mod structs;
 mod texture;
 use std::path::Path;
 
+use glam::{Quat, Vec3};
 use graphics::Renderer;
 use mesh::Model;
+use structs::Transform;
 
 fn main() {
     // Create renderer
@@ -26,10 +28,19 @@ fn main() {
     // Upload the mesh to the GPU
     let model_spyro_gpu = renderer.upload_model(&model_spyro_cpu).expect("Failed to upload model!");
 
+    // Create a camera
+    let mut camera_transform = Transform {
+        translation: Vec3::ZERO,
+        rotation: Quat::IDENTITY,
+        scale: Vec3::ONE,
+    };
+
     // Main loop
     while !renderer.should_close() {
+        renderer.update_camera(&camera_transform);
         renderer.begin_frame();
         renderer.draw_model(&model_spyro_gpu);
         renderer.end_frame();
+        camera_transform.translation.z -= 0.02;
     }
 }

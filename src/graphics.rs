@@ -1,10 +1,11 @@
 use gl::types::GLenum;
+use glam::Mat4;
 use glfw::{Action, Context, Glfw, Key, Window, WindowEvent};
-use std::{sync::mpsc::Receiver, mem::size_of, path::Path, fs::File, io::Read};
+use std::{sync::mpsc::Receiver, mem::size_of, path::Path, fs::File, io::Read, f32::consts::PI};
 use queues::{queue, Queue, IsQueue};
 use memoffset::offset_of;
 
-use crate::{structs::Vertex, mesh::Model};
+use crate::{structs::{Vertex, Transform}, mesh::Model};
 
 pub struct Renderer {
     // Window stuff
@@ -17,6 +18,10 @@ pub struct Renderer {
 
     // Main triangle shader
     triangle_shader: u32,
+
+    // Constant buffers
+    const_buffer_cpu: GlobalConstBuffer,
+    const_buffer_gpu: u32,
 }
 
 #[derive(Clone)]
@@ -43,6 +48,10 @@ pub struct ModelGPU {
 enum ShaderPart {
     Vertex,
     Fragment,
+}
+
+pub struct GlobalConstBuffer {
+    view_projection_matrix: Mat4,
 }
 
 impl Renderer {
@@ -75,10 +84,19 @@ impl Renderer {
             events,
             mesh_queue: queue![],
             triangle_shader: 0,
+            const_buffer_cpu: GlobalConstBuffer { view_projection_matrix: Mat4::IDENTITY  },
+            const_buffer_gpu: 0,
         };
 
         // Load shaders
         renderer.triangle_shader = renderer.load_shader(Path::new("assets/shaders/lit")).expect("Shader loading failed!");
+
+        // Create const buffer
+        unsafe {
+            gl::GenBuffers(1, &mut renderer.const_buffer_gpu);
+            gl::BindBuffer(gl::UNIFORM_BUFFER, renderer.const_buffer_gpu);
+            gl::BufferData(gl::UNIFORM_BUFFER, size_of::<GlobalConstBuffer>() as isize, std::mem::transmute(&renderer.const_buffer_cpu), gl::STATIC_DRAW);
+        }
 
         // Return a new renderer object
         Ok(renderer)
@@ -88,7 +106,22 @@ impl Renderer {
         self.window.should_close()
     }
 
+    pub fn update_camera(&mut self, camera_transform: &Transform) {
+        // Update CPU-side buffer
+        let view_matrix = Mat4::from_rotation_translation(camera_transform.rotation, camera_transform.translation);
+        let proj_matrix = Mat4::perspective_rh(PI / 4.0, 16.0 / 9.0, 0.1, 1000.0);
+        self.const_buffer_cpu.view_projection_matrix = proj_matrix * view_matrix;
+
+        // Update GPU-side buffer
+        unsafe {
+            gl::BindBuffer(gl::UNIFORM_BUFFER, self.const_buffer_gpu);
+            gl::BufferData(gl::UNIFORM_BUFFER, size_of::<GlobalConstBuffer>() as isize, std::mem::transmute(&self.const_buffer_cpu), gl::STATIC_DRAW);
+            gl::BindBuffer(gl::UNIFORM_BUFFER, 0);
+        }
+    }
+
     pub fn begin_frame(&self) {
+        // Clear the screen
         unsafe {
             gl::ClearColor(0.1, 0.1, 0.2, 1.0);
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
@@ -112,6 +145,9 @@ impl Renderer {
                 gl::BindVertexArray(mesh.vao);
                 gl::BindBuffer(gl::ARRAY_BUFFER, mesh.vbo);
     
+                // Bind the constant buffer
+                gl::BindBufferBase(gl::UNIFORM_BUFFER, 0, self.const_buffer_gpu);
+
                 // Draw the model
                 gl::DrawArrays(gl::TRIANGLES, 0, mesh.n_vertices);
             }
