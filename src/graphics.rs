@@ -343,8 +343,8 @@ impl Renderer {
             gl::BindTexture(gl::TEXTURE_2D, texture.gl_id);
             gl::TexImage2D(gl::TEXTURE_2D, 0,  gl::RGBA8 as i32, texture.width as i32, texture.height as i32, 0, gl::RGBA, gl::UNSIGNED_BYTE, texture.data.as_ptr()  as *const _);
             gl::GenerateMipmap(gl::TEXTURE_2D);
-            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
-            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as i32);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
         }
         return texture.gl_id;
     }
