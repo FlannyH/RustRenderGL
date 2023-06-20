@@ -8,7 +8,7 @@ use std::{
 };
 use std::hash::Hash;
 
-use crate::{camera::Camera, input::UserInput, structs::Vertex, mesh::Model};
+use crate::{camera::Camera, input::UserInput, structs::Vertex, mesh::Model, texture::Texture};
 
 pub struct Renderer {
     // Window stuff
@@ -35,6 +35,7 @@ pub struct MeshQueueEntry {
     vao: u32,
     vbo: u32,
     n_vertices: i32,
+    material: crate::material::Material,
 }
 
 pub struct GlobalConstBuffer {
@@ -154,6 +155,9 @@ impl Renderer {
                 // Bind the constant buffer
                 gl::BindBufferBase(gl::UNIFORM_BUFFER, 0, self.const_buffer_gpu);
 
+                // Bind the texture
+                gl::BindTexture(gl::TEXTURE_2D, mesh.material.tex_alb as u32);
+
                 // Draw the model
                 gl::DrawArrays(gl::TRIANGLES, 0, mesh.n_vertices);
             }
@@ -173,7 +177,7 @@ impl Renderer {
 
     pub fn load_model(&mut self, path: &Path) -> Result<u64, u32> {
         // Try to load model
-        let model = Model::load_gltf(path);
+        let model = Model::load_gltf(path, self);
         if model.is_err() {
             println!("Error loading model: {}", model.err().unwrap());
             return Err(0)
@@ -272,6 +276,13 @@ impl Renderer {
             }
         }
 
+        // Upload each material
+        for (name, material) in &model_cpu.materials {
+            // Combine name to follow this scheme "test.gltf::materials/mat_name/albedo"
+            let new_name = format!("{}::materials/{}/albedo", path.display(), name);
+            println!("{:?}", material);
+        }
+
         // Calculate hash
         let mut s = DefaultHasher::new();
         path.hash(&mut s);
@@ -289,12 +300,13 @@ impl Renderer {
         if !self.models.contains_key(model_id) {
             return;
         }
-        for mesh in self.models.get(model_id).unwrap().meshes.values() {
+        for (name, mesh) in &self.models.get(model_id).unwrap().meshes {
             self.mesh_queue
                 .add(MeshQueueEntry {
                     vao: mesh.vao,
                     vbo: mesh.vbo,
                     n_vertices: mesh.verts.len() as i32,
+                    material: self.models.get(model_id).unwrap().materials.get(name).unwrap().clone(),
                 })
                 .expect("Failed to add mesh to mesh queue");
         }
@@ -323,6 +335,18 @@ impl Renderer {
         }
 
         Ok(program)
+    }
+
+    pub fn upload_texture(&self, texture: &mut Texture) -> u32{
+        unsafe {
+            gl::GenTextures(1, &mut texture.gl_id);
+            gl::BindTexture(gl::TEXTURE_2D, texture.gl_id);
+            gl::TexImage2D(gl::TEXTURE_2D, 0,  gl::RGBA8 as i32, texture.width as i32, texture.height as i32, 0, gl::RGBA, gl::UNSIGNED_BYTE, texture.data.as_ptr()  as *const _);
+            gl::GenerateMipmap(gl::TEXTURE_2D);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as i32);
+        }
+        return texture.gl_id;
     }
 }
 fn load_shader_part(shader_type: GLenum, path: &Path, program: u32) {

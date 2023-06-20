@@ -1,5 +1,6 @@
 use glam::Vec3;
 
+#[derive(Debug, Clone)]
 pub struct Material {
     // Textures - indices to Resources::textures array
     pub tex_alb: i32,

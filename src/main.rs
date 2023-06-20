@@ -45,7 +45,7 @@ fn main() {
             break;
         }
         renderer.update_input(&mut user_input);
-        camera.update(&user_input, 0.016);
+        camera.update(&user_input, 0.016); //todo: actual delta time
         renderer.update_camera(&camera);
         renderer.begin_frame();
         renderer.draw_model(&model_spyro);

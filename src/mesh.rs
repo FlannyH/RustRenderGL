@@ -1,3 +1,4 @@
+use crate::graphics::Renderer;
 use crate::material::Material;
 use crate::structs::Transform;
 use crate::{structs::Vertex, texture::Texture};
@@ -273,13 +274,13 @@ fn traverse_nodes(
 }
 
 impl Model {
-    pub(crate) fn load_gltf(path: &Path) -> Result<Model, &str> {
+    pub(crate) fn load_gltf(path: &Path, renderer: &mut Renderer) -> Result<Model, String> {
         let mut model = Model::new();
 
         // Load GLTF from file
         let gltf_file = gltf::import(path);
         if gltf_file.is_err() {
-            return Err("Failed to load GLTF file {path}!");
+            return Err("Failed to load GLTF file {path}!".to_string());
         }
         let (gltf_document, mesh_data, image_data) = gltf_file.unwrap();
 
@@ -311,7 +312,7 @@ impl Model {
 
             // Get the texture data
             if let Some(tex) = tex_info_alb {
-                Texture::load_texture_from_gltf_image(&image_data[tex.texture().source().index()]);
+                new_material.tex_alb = renderer.upload_texture(&mut Texture::load_texture_from_gltf_image(&image_data[tex.texture().source().index()])) as i32;            
             }
 
             model.materials.insert(
