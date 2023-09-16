@@ -21,6 +21,7 @@ pub struct Renderer {
 	quad_vbo: u32,
 	quad_vao: u32,
 	fbo_shader: u32,
+	window_resolution_prev: [i32; 2],
 
     // Resources
     models: HashMap<u64, Model>,
@@ -93,6 +94,7 @@ impl Renderer {
             quad_vbo: 0,
             quad_vao: 0,
             fbo_shader: 0,
+            window_resolution_prev: [0, 0],
         };
 
         // Load shaders
@@ -141,7 +143,7 @@ impl Renderer {
 		// Create screen quad
 		unsafe {
 			let quad =vec![
-				//Vertices
+				// Vertices
 				1.0f32,  1.0,
 				-1.0, -1.0,
 				-1.0,  1.0,
@@ -149,7 +151,7 @@ impl Renderer {
 				1.0, -1.0,
 				-1.0, -1.0,
 
-				//Texcoords
+				// Texcoords
 				1.0, 1.0,
 				0.0, 0.0,
 				0.0, 1.0,
@@ -197,8 +199,9 @@ impl Renderer {
         }
     }
 
-    pub fn begin_frame(&self) {
+    pub fn begin_frame(&mut self) {
         // Clear the screen
+		self.update_framebuffer_resolution();
         unsafe {
 			gl::BindFramebuffer(gl::FRAMEBUFFER, self.framebuffer_object);
             gl::ClearColor(0.1, 0.1, 0.2, 1.0);
@@ -238,6 +241,7 @@ impl Renderer {
 		// Render to window buffer
 		unsafe {
 			gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
+			gl::Viewport(0, 0, self.window_resolution_prev[0], self.window_resolution_prev[1]);
             gl::Disable(gl::DEPTH_TEST);
             gl::Disable(gl::CULL_FACE);
 			gl::UseProgram(self.fbo_shader);
@@ -250,6 +254,48 @@ impl Renderer {
         // Swap front and back buffers
         self.window.swap_buffers();
     }
+
+	fn update_framebuffer_resolution(&mut self) {
+		let window_resolution = self.window.get_framebuffer_size();
+		let window_resolution = [window_resolution.0, window_resolution.1];
+		if window_resolution != self.window_resolution_prev {
+			Self::resize_texture(
+				&mut self.framebuffer_texture, 
+				window_resolution[0], 
+				window_resolution[1],
+				gl::RGBA16F as _,
+				gl::RGBA,
+				gl::FLOAT,
+			);
+			Self::resize_texture(
+				&mut self.depth_buffer_texture, 
+				window_resolution[0], 
+				window_resolution[1],
+				gl::DEPTH24_STENCIL8 as _,
+				gl::DEPTH_STENCIL,
+				gl::UNSIGNED_INT_24_8,
+			);			
+
+			unsafe {
+				gl::BindFramebuffer(gl::FRAMEBUFFER, self.framebuffer_object);
+				gl::FramebufferTexture2D(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, gl::TEXTURE_2D, self.framebuffer_texture, 0);
+				gl::FramebufferTexture2D(gl::FRAMEBUFFER, gl::DEPTH_STENCIL_ATTACHMENT, gl::TEXTURE_2D, self.depth_buffer_texture, 0);
+			}
+		}
+		self.window_resolution_prev = window_resolution;
+	}
+	
+	fn resize_texture(texture: &mut u32, width: i32, height: i32, tex_format_internal: i32, tex_format: u32, component_type: u32) {
+		unsafe {
+			gl::DeleteTextures(1, texture);
+			gl::GenTextures(1, texture);
+			gl::BindTexture(gl::TEXTURE_2D, *texture);
+			gl::TexImage2D(gl::TEXTURE_2D, 0, tex_format_internal, width, height, 0, tex_format, component_type, null() as *const c_void);
+			gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as _);
+			gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as _);
+			gl::BindTexture(gl::TEXTURE_2D, 0);
+		}
+	}
 
     pub fn update_input(&mut self, input: &mut UserInput) {
         // Poll for and process events
