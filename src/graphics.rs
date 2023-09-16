@@ -4,7 +4,7 @@ use glfw::{Context, Glfw, Window, WindowEvent};
 use memoffset::offset_of;
 use queues::{queue, IsQueue, Queue};
 use std::{
-    f32::consts::PI, ffi::c_void, fs::File, io::Read, mem::size_of, path::Path, sync::mpsc::Receiver, collections::{HashMap, hash_map::DefaultHasher}, hash::Hasher,
+    f32::consts::PI, ffi::c_void, fs::File, io::Read, mem::size_of, path::Path, sync::mpsc::Receiver, collections::{HashMap, hash_map::DefaultHasher}, hash::Hasher, ptr::null,
 };
 use std::hash::Hash;
 
@@ -15,6 +15,10 @@ pub struct Renderer {
     glfw: Glfw,
     window: Window,
     events: Receiver<(f64, WindowEvent)>,
+	framebuffer_texture: u32,
+	framebuffer_object: u32,
+	depth_buffer_texture: u32,
+	depth_buffer_object: u32,
 
     // Resources
     models: HashMap<u64, Model>,
@@ -81,6 +85,10 @@ impl Renderer {
             },
             const_buffer_gpu: 0,
             models: HashMap::new(),
+            framebuffer_texture: 0,
+            framebuffer_object: 0,
+            depth_buffer_texture: 0,
+            depth_buffer_object: 0,
         };
 
         // Load shaders
@@ -99,6 +107,27 @@ impl Renderer {
                 gl::STATIC_DRAW,
             );
         }
+
+		// Create framebuffer
+		let window_resolution = renderer.window.get_framebuffer_size();
+		unsafe { // color
+			gl::GenFramebuffers(1, &mut renderer.framebuffer_object);
+			gl::BindFramebuffer(gl::FRAMEBUFFER, renderer.framebuffer_object);
+			gl::GenTextures(1, &mut renderer.framebuffer_texture);
+			gl::BindTexture(gl::TEXTURE_2D, renderer.framebuffer_texture);
+			gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RGBA16F as _, window_resolution.0, window_resolution.1, 0, gl::RGBA, gl::FLOAT, null());
+			gl::BindTexture(gl::TEXTURE_2D, 0);
+			gl::FramebufferTexture2D(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, gl::TEXTURE_2D, renderer.framebuffer_texture, 0);
+		}
+		unsafe { // depth
+			gl::GenFramebuffers(1, &mut renderer.depth_buffer_object);
+			gl::BindFramebuffer(gl::FRAMEBUFFER, renderer.depth_buffer_object);
+			gl::GenTextures(1, &mut renderer.depth_buffer_texture);
+			gl::BindTexture(gl::TEXTURE_2D, renderer.depth_buffer_texture);
+			gl::TexImage2D(gl::TEXTURE_2D, 0, gl::DEPTH24_STENCIL8 as _, window_resolution.0, window_resolution.1, 0, gl::DEPTH_STENCIL, gl::UNSIGNED_INT_24_8, null());
+			gl::BindTexture(gl::TEXTURE_2D, 0);
+			gl::FramebufferTexture2D(gl::FRAMEBUFFER, gl::DEPTH_STENCIL_ATTACHMENT, gl::TEXTURE_2D, renderer.framebuffer_texture, 0);
+		}
 
         // Return a new renderer object
         Ok(renderer)
