@@ -4,7 +4,7 @@ use glfw::{Context, Glfw, Window, WindowEvent};
 use memoffset::offset_of;
 use queues::{queue, IsQueue, Queue};
 use std::{
-    f32::consts::PI, ffi::c_void, fs::File, io::Read, mem::size_of, path::Path, sync::mpsc::Receiver, collections::{HashMap, hash_map::DefaultHasher}, hash::Hasher, ptr::null,
+    f32::consts::PI, ffi::c_void, fs::File, io::Read, mem::{size_of, size_of_val}, path::Path, sync::mpsc::Receiver, collections::{HashMap, hash_map::DefaultHasher}, hash::Hasher, ptr::null,
 };
 use std::hash::Hash;
 
@@ -15,10 +15,12 @@ pub struct Renderer {
     glfw: Glfw,
     window: Window,
     events: Receiver<(f64, WindowEvent)>,
+	depth_buffer_texture: u32,
 	framebuffer_texture: u32,
 	framebuffer_object: u32,
-	depth_buffer_texture: u32,
-	depth_buffer_object: u32,
+	quad_vbo: u32,
+	quad_vao: u32,
+	fbo_shader: u32,
 
     // Resources
     models: HashMap<u64, Model>,
@@ -85,13 +87,18 @@ impl Renderer {
             },
             const_buffer_gpu: 0,
             models: HashMap::new(),
+            depth_buffer_texture: 0,
             framebuffer_texture: 0,
             framebuffer_object: 0,
-            depth_buffer_texture: 0,
-            depth_buffer_object: 0,
+            quad_vbo: 0,
+            quad_vao: 0,
+            fbo_shader: 0,
         };
 
         // Load shaders
+		renderer.fbo_shader = renderer
+			.load_shader(Path::new("assets/shaders/fbo"))
+			.expect("Shader loading failed");
         renderer.triangle_shader = renderer
             .load_shader(Path::new("assets/shaders/lit"))
             .expect("Shader loading failed!");
@@ -110,23 +117,57 @@ impl Renderer {
 
 		// Create framebuffer
 		let window_resolution = renderer.window.get_framebuffer_size();
-		unsafe { // color
+		unsafe { 
+			// Color
 			gl::GenFramebuffers(1, &mut renderer.framebuffer_object);
 			gl::BindFramebuffer(gl::FRAMEBUFFER, renderer.framebuffer_object);
 			gl::GenTextures(1, &mut renderer.framebuffer_texture);
 			gl::BindTexture(gl::TEXTURE_2D, renderer.framebuffer_texture);
 			gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RGBA16F as _, window_resolution.0, window_resolution.1, 0, gl::RGBA, gl::FLOAT, null());
+			gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as _);
+			gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as _);
 			gl::BindTexture(gl::TEXTURE_2D, 0);
 			gl::FramebufferTexture2D(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, gl::TEXTURE_2D, renderer.framebuffer_texture, 0);
-		}
-		unsafe { // depth
-			gl::GenFramebuffers(1, &mut renderer.depth_buffer_object);
-			gl::BindFramebuffer(gl::FRAMEBUFFER, renderer.depth_buffer_object);
+
+			// Depth
+			gl::BindFramebuffer(gl::FRAMEBUFFER, renderer.framebuffer_object);
 			gl::GenTextures(1, &mut renderer.depth_buffer_texture);
 			gl::BindTexture(gl::TEXTURE_2D, renderer.depth_buffer_texture);
 			gl::TexImage2D(gl::TEXTURE_2D, 0, gl::DEPTH24_STENCIL8 as _, window_resolution.0, window_resolution.1, 0, gl::DEPTH_STENCIL, gl::UNSIGNED_INT_24_8, null());
 			gl::BindTexture(gl::TEXTURE_2D, 0);
-			gl::FramebufferTexture2D(gl::FRAMEBUFFER, gl::DEPTH_STENCIL_ATTACHMENT, gl::TEXTURE_2D, renderer.framebuffer_texture, 0);
+			gl::FramebufferTexture2D(gl::FRAMEBUFFER, gl::DEPTH_STENCIL_ATTACHMENT, gl::TEXTURE_2D, renderer.depth_buffer_texture, 0);
+		}
+
+		// Create screen quad
+		unsafe {
+			let quad =vec![
+				//Vertices
+				1.0f32,  1.0,
+				-1.0, -1.0,
+				-1.0,  1.0,
+				1.0,  1.0,
+				1.0, -1.0,
+				-1.0, -1.0,
+
+				//Texcoords
+				1.0, 1.0,
+				0.0, 0.0,
+				0.0, 1.0,
+				1.0, 1.0,
+				1.0, 0.0,
+				0.0, 0.0,
+			];
+			gl::GenVertexArrays(1, &mut renderer.quad_vao);
+			gl::GenBuffers(1, &mut renderer.quad_vbo);
+			gl::BindVertexArray(renderer.quad_vao);
+			gl::BindBuffer(gl::ARRAY_BUFFER, renderer.quad_vbo);
+			gl::BufferData(gl::ARRAY_BUFFER, (quad.len() * size_of::<f32>()) as isize, quad.as_ptr() as *const c_void, gl::STATIC_DRAW);
+			gl::EnableVertexAttribArray(0);
+			gl::EnableVertexAttribArray(1);
+			gl::VertexAttribPointer(0, 2, gl::FLOAT, gl::FALSE, 0, std::ptr::null::<c_void>());
+			gl::VertexAttribPointer(1, 2, gl::FLOAT, gl::FALSE, 0, (12 * size_of::<f32>()) as _);
+			gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+			gl::BindVertexArray(0);
 		}
 
         // Return a new renderer object
@@ -159,7 +200,9 @@ impl Renderer {
     pub fn begin_frame(&self) {
         // Clear the screen
         unsafe {
+			gl::BindFramebuffer(gl::FRAMEBUFFER, self.framebuffer_object);
             gl::ClearColor(0.1, 0.1, 0.2, 1.0);
+			gl::ClearDepth(1.0);
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
         }
     }
@@ -191,6 +234,18 @@ impl Renderer {
                 gl::DrawArrays(gl::TRIANGLES, 0, mesh.n_vertices);
             }
         }
+
+		// Render to window buffer
+		unsafe {
+			gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
+            gl::Disable(gl::DEPTH_TEST);
+            gl::Disable(gl::CULL_FACE);
+			gl::UseProgram(self.fbo_shader);
+			gl::BindTexture(gl::TEXTURE_2D, self.framebuffer_texture);
+			gl::BindVertexArray(self.quad_vao);
+			gl::DrawArrays(gl::TRIANGLES, 0, 6);
+			gl::BindTexture(gl::TEXTURE_2D, 0);
+		}
 
         // Swap front and back buffers
         self.window.swap_buffers();
