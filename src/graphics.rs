@@ -32,6 +32,9 @@ pub struct Renderer {
     // Main triangle shader
     triangle_shader: u32,
 
+	// Raytracing stuff
+	raytracing_shader: u32,
+
     // Constant buffers
     const_buffer_cpu: GlobalConstBuffer,
     const_buffer_gpu: u32,
@@ -83,6 +86,7 @@ impl Renderer {
             events,
             mesh_queue: queue![],
             triangle_shader: 0,
+			raytracing_shader: 0,
             const_buffer_cpu: GlobalConstBuffer {
                 view_projection_matrix: Mat4::IDENTITY,
             },
@@ -104,6 +108,9 @@ impl Renderer {
         renderer.triangle_shader = renderer
             .load_shader(Path::new("assets/shaders/lit"))
             .expect("Shader loading failed!");
+		renderer.raytracing_shader = renderer
+			.load_shader_compute(Path::new("assets/shaders/test.comp"))
+			.expect("Shader loading failed!");
 
         // Create const buffer
         unsafe {
@@ -466,6 +473,25 @@ impl Renderer {
 
         Ok(program)
     }
+
+	pub fn load_shader_compute(&mut self, path: &Path) -> Result<u32, &str> {
+		let program;
+        unsafe {
+            program = gl::CreateProgram();
+        }
+
+        // Load and compile shader parts
+        load_shader_part(
+            gl::COMPUTE_SHADER,
+            path.with_extension("comp").as_path(),
+            program,
+        );
+        unsafe {
+            gl::LinkProgram(program);
+        }
+
+        Ok(program)
+	}
 
     pub fn upload_texture(&self, texture: &mut Texture) -> u32{
         unsafe {
