@@ -10,6 +10,12 @@ pub struct Vertex {
     pub uv1: Vec2,
 }
 
+pub struct Triangle {
+	pub v0: Vertex,
+	pub v1: Vertex,
+	pub v2: Vertex,
+}
+
 #[derive(Debug, Copy, Clone)]
 pub struct FragIn {
     pub position: Vec4,
