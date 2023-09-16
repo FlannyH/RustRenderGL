@@ -244,6 +244,15 @@ impl Renderer {
                 gl::DrawArrays(gl::TRIANGLES, 0, mesh.n_vertices);
             }
         }
+		
+		// Render compute shader test
+		let resolution = self.window.get_framebuffer_size();
+		unsafe {
+			gl::UseProgram(self.raytracing_shader);
+			gl::BindImageTexture(0, self.framebuffer_texture, 0, gl::FALSE, 0, gl::READ_WRITE, gl::RGBA16F);
+			gl::DispatchCompute(resolution.0 as _, resolution.1 as _, 1);
+			gl::MemoryBarrier(gl::SHADER_IMAGE_ACCESS_BARRIER_BIT);
+		}
 
 		// Render to window buffer
 		unsafe {

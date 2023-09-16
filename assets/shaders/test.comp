@@ -1,13 +1,9 @@
 #version 460
 layout(local_size_x = 1, local_size_y = 1) in;
 layout(rgba16f, binding = 0) uniform image2D img_input;
-layout(rgba16f, binding = 1) uniform image2D img_output;
-
-ivec2 current_resolution;
-ivec2 target_resolution;
 
 void main() {
 	ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
 	vec4 pixel = vec4(1.0, 0.0, 1.0, 1.0);
-	imageStore(img_output, ivec2(pixel_coords.x, pixel_coords.y), pixel);
+	imageStore(img_input, ivec2(pixel_coords.x, pixel_coords.y), pixel);
 }
