@@ -239,7 +239,6 @@ impl Renderer {
 
     pub fn end_frame_raster(&mut self) {
         // Enable depth testing
-        // todo: separate all the unsafe gl parts into separate functions
         unsafe {
             gl::Enable(gl::DEPTH_TEST);
             gl::Enable(gl::CULL_FACE);
@@ -265,6 +264,34 @@ impl Renderer {
             }
         }
 		
+		// Render to window buffer
+		unsafe {
+			gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
+			gl::Viewport(0, 0, self.window_resolution_prev[0], self.window_resolution_prev[1]);
+            gl::Disable(gl::DEPTH_TEST);
+            gl::Disable(gl::CULL_FACE);
+			gl::UseProgram(self.fbo_shader);
+			gl::BindTexture(gl::TEXTURE_2D, self.framebuffer_texture);
+			gl::BindVertexArray(self.quad_vao);
+			gl::DrawArrays(gl::TRIANGLES, 0, 6);
+			gl::BindTexture(gl::TEXTURE_2D, 0);
+		}
+    }
+
+	fn end_frame_raytrace(&mut self) {
+        // Enable depth testing
+        unsafe {
+            gl::Enable(gl::DEPTH_TEST);
+            gl::Enable(gl::CULL_FACE);
+            gl::UseProgram(self.triangle_shader);
+        }
+
+        // Render mesh queue
+        while let Ok(mesh) = self.mesh_queue.remove() {
+            // Render the first mesh in the queue
+			
+        }
+		
 		// Render compute shader test
 		let resolution = self.window.get_framebuffer_size();
 		unsafe {
@@ -286,10 +313,6 @@ impl Renderer {
 			gl::DrawArrays(gl::TRIANGLES, 0, 6);
 			gl::BindTexture(gl::TEXTURE_2D, 0);
 		}
-    }
-
-	fn end_frame_raytrace(&mut self) {
-
 	}
 
 	fn update_framebuffer_resolution(&mut self) {
