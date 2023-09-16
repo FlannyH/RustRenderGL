@@ -304,11 +304,11 @@ impl Model {
 
             // Try to find textures
             let tex_info_alb = material.pbr_metallic_roughness().base_color_texture();
-            let tex_info_mtl_rgh = material
+            let _tex_info_mtl_rgh = material
                 .pbr_metallic_roughness()
                 .metallic_roughness_texture();
-            let tex_info_nrm = material.normal_texture();
-            let tex_info_emm = material.emissive_texture();
+            let _tex_info_nrm = material.normal_texture();
+            let _tex_info_emm = material.emissive_texture();
 
             // Get the texture data
             if let Some(tex) = tex_info_alb {

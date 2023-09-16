@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use glam::Vec2;
 
 pub fn index_to_coords(index: usize, width: usize) -> glam::Vec2 {

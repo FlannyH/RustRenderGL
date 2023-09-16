@@ -1,4 +1,5 @@
 #![allow(clippy::identity_op)]
+#![allow(clippy::needless_return)]
 
 mod camera;
 mod graphics;
@@ -8,7 +9,7 @@ mod mesh;
 mod structs;
 mod texture;
 mod helpers;
-use std::{path::Path};
+use std::path::Path;
 
 use camera::Camera;
 use graphics::Renderer;

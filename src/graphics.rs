@@ -4,7 +4,7 @@ use glfw::{Context, Glfw, Window, WindowEvent};
 use memoffset::offset_of;
 use queues::{queue, IsQueue, Queue};
 use std::{
-    f32::consts::PI, ffi::c_void, fs::File, io::Read, mem::{size_of, size_of_val}, path::Path, sync::mpsc::Receiver, collections::{HashMap, hash_map::DefaultHasher}, hash::Hasher, ptr::null,
+    f32::consts::PI, ffi::c_void, fs::File, io::Read, mem::size_of, path::Path, sync::mpsc::Receiver, collections::{HashMap, hash_map::DefaultHasher}, hash::Hasher, ptr::null,
 };
 use std::hash::Hash;
 
@@ -363,7 +363,7 @@ impl Renderer {
         // Upload each material
         for (name, material) in &model_cpu.materials {
             // Combine name to follow this scheme "test.gltf::materials/mat_name/albedo"
-            let new_name = format!("{}::materials/{}/albedo", path.display(), name);
+            let _new_name = format!("{}::materials/{}/albedo", path.display(), name);
             println!("{:?}", material);
         }
 
