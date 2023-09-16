@@ -10,6 +10,13 @@ use std::hash::Hash;
 
 use crate::{camera::Camera, input::UserInput, structs::Vertex, mesh::Model, texture::Texture};
 
+#[allow(dead_code)]
+pub enum RenderMode {
+	None,
+	Rasterized,
+	Raytraced,
+}
+
 pub struct Renderer {
     // Window stuff
     glfw: Glfw,
@@ -22,6 +29,7 @@ pub struct Renderer {
 	quad_vao: u32,
 	fbo_shader: u32,
 	window_resolution_prev: [i32; 2],
+	mode: RenderMode,
 
     // Resources
     models: HashMap<u64, Model>,
@@ -99,6 +107,7 @@ impl Renderer {
             quad_vao: 0,
             fbo_shader: 0,
             window_resolution_prev: [0, 0],
+            mode: RenderMode::Raytraced,
         };
 
         // Load shaders
@@ -217,7 +226,18 @@ impl Renderer {
         }
     }
 
-    pub fn end_frame(&mut self) {
+	pub fn end_frame(&mut self) {
+		match self.mode {
+			RenderMode::None => {},
+			RenderMode::Rasterized => self.end_frame_raster(),
+			RenderMode::Raytraced => self.end_frame_raytrace(),
+		}
+
+        // Swap front and back buffers
+        self.window.swap_buffers();
+	}
+
+    pub fn end_frame_raster(&mut self) {
         // Enable depth testing
         // todo: separate all the unsafe gl parts into separate functions
         unsafe {
@@ -266,10 +286,11 @@ impl Renderer {
 			gl::DrawArrays(gl::TRIANGLES, 0, 6);
 			gl::BindTexture(gl::TEXTURE_2D, 0);
 		}
-
-        // Swap front and back buffers
-        self.window.swap_buffers();
     }
+
+	fn end_frame_raytrace(&mut self) {
+
+	}
 
 	fn update_framebuffer_resolution(&mut self) {
 		let window_resolution = self.window.get_framebuffer_size();
