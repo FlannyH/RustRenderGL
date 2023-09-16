@@ -9,6 +9,8 @@ mod mesh;
 mod structs;
 mod texture;
 mod helpers;
+mod bvh;
+mod aabb;
 use std::path::Path;
 
 use camera::Camera;
