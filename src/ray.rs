@@ -37,3 +37,40 @@ impl AABB {
 		return tmax >= tmin && tmax >= 0.0;
 	}
 }
+
+impl Triangle {
+	pub fn intersects(&self, ray: &Ray) -> Option<HitInfo> {
+		let edge1 = self.v1.position - self.v0.position;
+		let edge2 = self.v2.position - self.v0.position;
+		let h = ray.direction.cross(edge2);
+		let det = edge1.dot(h);
+
+		if det == 0.0 {
+			return None;
+		}
+
+		let inv_det = 1.0 / det;
+		let v0_ray = ray.position - self.v0.position;
+		let u = inv_det * (v0_ray.dot(h));
+
+		if !(0.0..=1.0).contains(&u) {
+			return None;
+		}
+
+		let q = v0_ray.cross(edge1);
+		let v = inv_det * ray.direction.dot(q);
+		if !(0.0..=1.0).contains(&v) {
+			return None;
+		}
+
+		let t = inv_det * edge2.dot(q);
+		if t > 0.0 {
+			return Some(HitInfo {
+				distance: t,
+				normal: edge1.cross(edge2).normalize(),
+			});
+		}
+
+		return None;
+	}
+}
