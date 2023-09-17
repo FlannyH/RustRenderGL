@@ -31,6 +31,14 @@ pub struct Transform {
     pub scale: Vec3,
 }
 
+#[derive(Debug, Clone)]
+pub struct Pixel32 {
+	pub r: u8,
+	pub g: u8,
+	pub b: u8,
+	pub a: u8,
+}
+
 impl FragIn {
 	#[allow(dead_code)]
     pub fn lerp(&self, rhs: FragIn, t: f32) -> FragIn {

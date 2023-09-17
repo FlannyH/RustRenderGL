@@ -8,7 +8,7 @@ use std::{
 };
 use std::hash::Hash;
 
-use crate::{camera::Camera, input::UserInput, structs::Vertex, mesh::Model, texture::Texture};
+use crate::{camera::Camera, input::UserInput, structs::{Vertex, Pixel32}, mesh::Model, texture::Texture};
 
 #[allow(dead_code)]
 pub enum RenderMode {
@@ -43,6 +43,8 @@ pub struct Renderer {
 
 	// Raytracing stuff
 	raytracing_shader: u32,
+	framebuffer_cpu: Vec<Pixel32>,
+	framebuffer_cpu_to_gpu: u32,
 
     // Constant buffers
     const_buffer_cpu: GlobalConstBuffer,
@@ -93,22 +95,24 @@ impl Renderer {
             glfw,
             window,
             events,
-            mesh_queue: queue![],
-            triangle_shader: 0,
-			raytracing_shader: 0,
-            const_buffer_cpu: GlobalConstBuffer {
-                view_projection_matrix: Mat4::IDENTITY,
-            },
-            const_buffer_gpu: 0,
-            models: HashMap::new(),
             depth_buffer_texture: 0,
             framebuffer_texture: 0,
-            framebuffer_object: 0,
+			framebuffer_object: 0,
             quad_vbo: 0,
             quad_vao: 0,
             fbo_shader: 0,
             window_resolution_prev: [0, 0],
-            mode: RenderMode::Rasterized,
+            mode: RenderMode::RaytracedCPU,
+            models: HashMap::new(),
+            mesh_queue: queue![],
+            triangle_shader: 0,
+            raytracing_shader: 0,
+            framebuffer_cpu: Vec::new(),
+            const_buffer_cpu: GlobalConstBuffer {
+                view_projection_matrix: Mat4::IDENTITY,
+            },
+            const_buffer_gpu: 0,
+            framebuffer_cpu_to_gpu: 0,
         };
 
         // Load shaders
@@ -155,6 +159,14 @@ impl Renderer {
 			gl::TexImage2D(gl::TEXTURE_2D, 0, gl::DEPTH24_STENCIL8 as _, window_resolution.0, window_resolution.1, 0, gl::DEPTH_STENCIL, gl::UNSIGNED_INT_24_8, null());
 			gl::BindTexture(gl::TEXTURE_2D, 0);
 			gl::FramebufferTexture2D(gl::FRAMEBUFFER, gl::DEPTH_STENCIL_ATTACHMENT, gl::TEXTURE_2D, renderer.depth_buffer_texture, 0);
+		}
+
+		// Create cpu framebuffer (for cpu raytrace rendering mode)
+		unsafe {
+			gl::GenTextures(1, &mut renderer.framebuffer_cpu_to_gpu);
+			gl::BindTexture(gl::TEXTURE_2D, renderer.framebuffer_cpu_to_gpu);
+			gl::TexImage2D(gl::TEXTURE_2D, 0, gl::DEPTH24_STENCIL8 as _, window_resolution.0, window_resolution.1, 0, gl::DEPTH_STENCIL, gl::UNSIGNED_INT_24_8, null());
+			gl::BindTexture(gl::TEXTURE_2D, 0);
 		}
 
 		// Create screen quad
@@ -288,19 +300,20 @@ impl Renderer {
             gl::UseProgram(self.triangle_shader);
         }
 
-        // Render mesh queue
-        while let Ok(mesh) = self.mesh_queue.remove() {
-            // Render the first mesh in the queue
-			// todo
-        }
-		
-		// Render compute shader test
+        // For now, we just make a buffer with random data in it
 		let resolution = self.window.get_framebuffer_size();
+		for i in 0..self.framebuffer_cpu.len() {
+			self.framebuffer_cpu[i] = Pixel32 {
+				r: ((i >> 0) % 256) as u8,
+				g: ((i >> 8) % 256) as u8,
+				b: ((i >> 16) % 256) as u8,
+				a: 255
+			};
+		}
 		unsafe {
-			gl::UseProgram(self.raytracing_shader);
-			gl::BindImageTexture(0, self.framebuffer_texture, 0, gl::FALSE, 0, gl::READ_WRITE, gl::RGBA16F);
-			gl::DispatchCompute(resolution.0 as _, resolution.1 as _, 1);
-			gl::MemoryBarrier(gl::SHADER_IMAGE_ACCESS_BARRIER_BIT);
+			gl::BindTexture(gl::TEXTURE_2D, self.framebuffer_cpu_to_gpu);
+			gl::TexImage2D(gl::TEXTURE_2D, 0, gl::RGBA8 as _, resolution.0, resolution.1, 0, gl::RGBA, gl::UNSIGNED_BYTE, self.framebuffer_cpu.as_ptr() as _);
+			gl::BindTexture(gl::TEXTURE_2D, 0);
 		}
 
 		// Render to window buffer
@@ -310,7 +323,7 @@ impl Renderer {
             gl::Disable(gl::DEPTH_TEST);
             gl::Disable(gl::CULL_FACE);
 			gl::UseProgram(self.fbo_shader);
-			gl::BindTexture(gl::TEXTURE_2D, self.framebuffer_texture);
+			gl::BindTexture(gl::TEXTURE_2D, self.framebuffer_cpu_to_gpu);
 			gl::BindVertexArray(self.quad_vao);
 			gl::DrawArrays(gl::TRIANGLES, 0, 6);
 			gl::BindTexture(gl::TEXTURE_2D, 0);
@@ -326,7 +339,7 @@ impl Renderer {
         }
 
         // Render mesh queue
-        while let Ok(mesh) = self.mesh_queue.remove() {
+        while let Ok(_mesh) = self.mesh_queue.remove() {
             // Render the first mesh in the queue
 			// todo
         }
@@ -355,6 +368,7 @@ impl Renderer {
 	}
 
 	fn update_framebuffer_resolution(&mut self) {
+		// Update OpenGL framebuffer resolution
 		let window_resolution = self.window.get_framebuffer_size();
 		let window_resolution = [window_resolution.0, window_resolution.1];
 		if window_resolution != self.window_resolution_prev {
@@ -374,6 +388,14 @@ impl Renderer {
 				gl::DEPTH_STENCIL,
 				gl::UNSIGNED_INT_24_8,
 			);			
+			Self::resize_texture(
+				&mut self.framebuffer_cpu_to_gpu, 
+				window_resolution[0], 
+				window_resolution[1],
+				gl::RGBA8 as _,
+				gl::RGBA,
+				gl::UNSIGNED_BYTE,
+			);			
 
 			unsafe {
 				gl::BindFramebuffer(gl::FRAMEBUFFER, self.framebuffer_object);
@@ -381,6 +403,11 @@ impl Renderer {
 				gl::FramebufferTexture2D(gl::FRAMEBUFFER, gl::DEPTH_STENCIL_ATTACHMENT, gl::TEXTURE_2D, self.depth_buffer_texture, 0);
 			}
 		}
+
+		// Update software framebuffer resolution
+		self.framebuffer_cpu.clear();
+		self.framebuffer_cpu.resize((window_resolution[0] * window_resolution[1]) as usize, Pixel32{r:0,g:0,b:0,a:0});
+
 		self.window_resolution_prev = window_resolution;
 	}
 	
