@@ -22,12 +22,12 @@ impl AABB {
     }
 
     pub fn grow(&mut self, position: Vec3) {
-        self.min.x = position.x.min(position.x);
-        self.min.y = position.y.min(position.y);
-        self.min.z = position.z.min(position.z);
-        self.max.x = position.x.max(position.x);
-        self.max.y = position.y.max(position.y);
-        self.max.z = position.z.max(position.z);
+        self.min.x = self.min.x.min(position.x);
+        self.min.y = self.min.y.min(position.y);
+        self.min.z = self.min.z.min(position.z);
+        self.max.x = self.max.x.max(position.x);
+        self.max.y = self.max.y.max(position.y);
+        self.max.z = self.max.z.max(position.z);
     }
 
     pub fn area(&mut self) -> f32 {

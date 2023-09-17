@@ -9,6 +9,7 @@ use gltf::buffer::Data;
 use std::sync::Arc;
 use std::{collections::HashMap, path::Path};
 
+#[derive(Clone)]
 pub struct Mesh {
     pub verts: Vec<Vertex>,
     pub vao: u32,

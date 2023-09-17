@@ -19,7 +19,7 @@ use std::{
 };
 
 use crate::aabb::AABB;
-use crate::bvh::Bvh;
+use crate::bvh::{Bvh, BvhNode};
 use crate::ray::Ray;
 use crate::structs::Transform;
 use crate::{
@@ -54,7 +54,7 @@ pub struct Renderer {
     pub mode: RenderMode,
 
     // Resources
-    models: HashMap<u64, Model>,
+    pub models: HashMap<u64, Model>,
 
     // Mesh render queue
     mesh_queue: Queue<MeshQueueEntry>,
@@ -818,7 +818,7 @@ impl Renderer {
         if !self.models.contains_key(model_id) {
             return;
         }
-        for (name, mesh) in &self.models.get(model_id).unwrap().meshes {
+        for (name, mesh) in &self.models.get(model_id).unwrap().meshes.clone() {
             self.mesh_queue
                 .add(MeshQueueEntry {
                     vao: mesh.vao,
@@ -834,13 +834,17 @@ impl Renderer {
                     bvh: mesh.bvh.clone(),
                 })
                 .expect("Failed to add mesh to mesh queue");
-            
-            Self::draw_bvh(mesh.bvh.clone().unwrap().as_ref(), Vec4::new(1.0, 1.0, 1.0, 1.0));
+            let bvh = mesh.bvh.clone().unwrap();
+            self.draw_bvh(bvh, Vec4::new(1.0, 1.0, 1.0, 1.0));
         }
     }
 
-    pub fn draw_bvh(bvh: &Bvh, color: Vec4) {
-
+    pub fn draw_bvh(&mut self, bvh: Arc<Bvh>, color: Vec4) {
+        self.draw_bvh_sub(&bvh.nodes[0], color);
+    }
+    
+    fn draw_bvh_sub(&mut self, node: &BvhNode, color: Vec4) {
+        self.draw_aabb(&node.bounds, color);
     }
 
     pub fn draw_line(&mut self, p1: Vec3, p2: Vec3, color: Vec4) {
