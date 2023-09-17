@@ -1,5 +1,5 @@
 use gl::types::GLenum;
-use glam::Mat4;
+use glam::{Mat4, Vec3};
 use glfw::{Context, Glfw, Window, WindowEvent};
 use memoffset::offset_of;
 use queues::{queue, IsQueue, Queue};
@@ -60,6 +60,12 @@ pub struct Renderer {
     raytracing_shader: u32,
     framebuffer_cpu: Vec<Pixel32>,
     framebuffer_cpu_to_gpu: u32,
+
+    // Camera
+    fov: f32, // in radians
+    viewport_height: f32,
+    viewport_width: f32,
+    viewport_depth: f32,
 
     // Constant buffers
     const_buffer_cpu: GlobalConstBuffer,
@@ -124,7 +130,16 @@ impl Renderer {
             },
             const_buffer_gpu: 0,
             framebuffer_cpu_to_gpu: 0,
+            fov: 0.0,
+            viewport_height: 0.0,
+            viewport_width: 0.0,
+            viewport_depth: 1.0,
         };
+
+        // Set FOV
+        renderer.fov = 90.0_f32.to_radians();
+        renderer.viewport_height = (renderer.fov * 0.5).tan();
+        renderer.viewport_width = renderer.viewport_height * (width as f32 / height as f32);
 
         // Load shaders
         renderer.fbo_shader = renderer
@@ -354,14 +369,23 @@ impl Renderer {
 
         // For now, we just make a buffer with random data in it
         let resolution = self.window.get_framebuffer_size();
-        for i in 0..self.framebuffer_cpu.len() {
-            self.framebuffer_cpu[i] = Pixel32 {
-                r: ((i >> 0) % 256) as u8,
-                g: ((i >> 8) % 256) as u8,
-                b: ((i >> 16) % 256) as u8,
-                a: 255,
-            };
-        }
+        for y in 0..resolution.1 {
+			for x in 0..resolution.0 {
+				let u = ((x as f32 / resolution.0 as f32) * 2.0) - 1.0;
+				let v = ((y as f32 / resolution.1 as f32) * 2.0) - 1.0;
+				let forward_vec = Vec3 {
+					x: self.viewport_width * u,
+					y: self.viewport_height * v,
+					z: self.viewport_depth,
+				}.normalize();
+				self.framebuffer_cpu[(x + y * resolution.0) as usize] = Pixel32 {
+					r: ((forward_vec.x + 1.0) * 127.0).clamp(0.0, 255.0) as u8,
+					g: ((forward_vec.y + 1.0) * 127.0).clamp(0.0, 255.0) as u8,
+					b: ((forward_vec.z + 1.0) * 127.0).clamp(0.0, 255.0) as u8,
+					a: 255,
+				};
+			}
+		}
         unsafe {
             gl::BindTexture(gl::TEXTURE_2D, self.framebuffer_cpu_to_gpu);
             gl::TexImage2D(
@@ -507,6 +531,12 @@ impl Renderer {
                 a: 0,
             },
         );
+
+        // Set FOV
+        self.fov = 90.0_f32.to_radians();
+        self.viewport_height = (self.fov * 0.5).tan();
+        self.viewport_width =
+            self.viewport_height * (window_resolution[0] as f32 / window_resolution[1] as f32);
 
         self.window_resolution_prev = window_resolution;
     }
