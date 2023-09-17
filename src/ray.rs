@@ -59,7 +59,7 @@ impl Triangle {
 
         let q = v0_ray.cross(edge1);
         let v = inv_det * ray.direction.dot(q);
-        if !(0.0..=1.0).contains(&v) {
+        if v < 0.0 || (u + v) > 1.0 {
             return None;
         }
 
@@ -104,7 +104,7 @@ impl Bvh {
                     let triangle = &self.triangles[self.indices[i as usize] as usize];
                     if let Some(new_hit_info) = triangle.intersects(ray) {
                         // Is this one closer than the previous one we tested?
-                        if new_hit_info.distance < hit_info.distance {
+                        if new_hit_info.distance < hit_info.distance && new_hit_info.distance >= 0.0 {
                             // If so, copy the new hit info data
                             *hit_info = new_hit_info;
                         }
