@@ -11,6 +11,7 @@ mod texture;
 mod helpers;
 mod bvh;
 mod aabb;
+mod ray;
 use std::path::Path;
 
 use camera::Camera;
