@@ -74,3 +74,46 @@ impl Triangle {
 		return None;
 	}
 }
+
+impl Bvh {
+	pub fn intersects(&self, ray: &Ray) -> Option<HitInfo> {
+		let mut hit_info = HitInfo{
+    		distance: f32::INFINITY,
+    		normal: Vec3::ZERO,
+		};
+		self.intersects_sub(ray, 0, &mut hit_info);
+		match hit_info.distance {
+			f32::INFINITY => None,
+			_ => Some(hit_info)
+		}
+	}
+
+	fn intersects_sub(&self, ray: &Ray, node_index: u32, hit_info: &mut HitInfo) {
+		let node = &self.nodes[node_index as usize];
+
+		// Intersect node bounding box
+		if node.bounds.intersects(ray) {
+			// If it's a leaf node
+			if node.count > 0 {
+				// Loop over all triangles it contains
+				let begin = node.left_first;
+				let end = node.left_first + node.count;
+				for i in begin..end {
+					// Perform intersection test
+					let triangle = &self.triangles[self.indices[i as usize] as usize];
+					if let Some(new_hit_info) = triangle.intersects(ray) {
+						// Is this one closer than the previous one we tested?
+						if new_hit_info.distance < hit_info.distance {
+							// If so, copy the new hit info data
+							*hit_info = new_hit_info;
+						}
+					}
+				}
+			}
+			return;
+		}
+
+		self.intersects_sub(ray, node.left_first + 0, hit_info);
+		self.intersects_sub(ray, node.left_first + 1, hit_info);
+	}
+}

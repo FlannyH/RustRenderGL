@@ -2,16 +2,16 @@ use glam::Vec3;
 
 use crate::{aabb::AABB, structs::Triangle};
 
-struct BvhNode {
-	bounds: AABB, // 24 bytes
-	left_first: u32, // 4 bytes - if leaf, specifies first primitive index, otherwise, specifies node offset
-	count: u32, // 4 bytes - if non-zero, this is a leaf node
+pub struct BvhNode {
+	pub bounds: AABB, // 24 bytes
+	pub left_first: u32, // 4 bytes - if leaf, specifies first primitive index, otherwise, specifies node offset
+	pub count: u32, // 4 bytes - if non-zero, this is a leaf node
 }
 
-struct Bvh {
-	nodes: Vec<BvhNode>, // node 0 is always the root node
-	indices: Vec::<u32>,
-	triangles: Vec::<Triangle>,
+pub struct Bvh {
+	pub nodes: Vec<BvhNode>, // node 0 is always the root node
+	pub indices: Vec::<u32>,
+	pub triangles: Vec::<Triangle>,
 }
 
 enum Axis {
