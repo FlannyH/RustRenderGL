@@ -31,7 +31,7 @@ fn main() {
 
     // Upload the mesh to the GPU
     let model_spyro = renderer
-        .load_model(Path::new("assets/models/bvh_test_tiny.gltf"))
+        .load_model(Path::new("assets/models/spyro.gltf"))
         .expect("Failed to upload model!");
 
     // Create a camera

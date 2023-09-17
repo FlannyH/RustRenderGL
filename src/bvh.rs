@@ -57,7 +57,7 @@ impl Bvh {
         }
 
         // Only subdivide if we have more than 2 triangles
-        if node.count <= 30 || rec_depth > 30 {
+        if node.count <= 2 || rec_depth > 30 {
             println!("node {node_index} is a leaf node");
             return;
         }

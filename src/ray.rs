@@ -110,10 +110,10 @@ impl Bvh {
                         }
                     }
                 }
+                return;
             }
             self.intersects_sub(ray, node.left_first + 0, hit_info);
             self.intersects_sub(ray, node.left_first + 1, hit_info);
-            return;
         }
     }
 }

@@ -57,7 +57,7 @@ pub struct Renderer {
     pub models: HashMap<u64, Model>,
 
     // Mesh render queue
-    mesh_queue: Queue<MeshQueueEntry>,
+    mesh_queue: Vec<MeshQueueEntry>,
     line_queue: Vec<LineQueueEntry>,
 
     // Main triangle shader
@@ -137,9 +137,9 @@ impl Renderer {
             quad_vao: 0,
             fbo_shader: 0,
             window_resolution_prev: [0, 0],
-            mode: RenderMode::Rasterized,
+            mode: RenderMode::RaytracedCPU,
             models: HashMap::new(),
-            mesh_queue: queue![],
+            mesh_queue: vec![],
             line_queue: vec![],
             triangle_shader: 0,
             line_shader: 0,
@@ -329,6 +329,8 @@ impl Renderer {
             gl::ClearDepth(1.0);
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
         }
+        self.line_queue.clear();
+        self.mesh_queue.clear();
     }
 
     pub fn end_frame(&mut self) {
@@ -352,7 +354,7 @@ impl Renderer {
         }
 
         // Render mesh queue
-        while let Ok(mesh) = self.mesh_queue.remove() {
+        for mesh in &self.mesh_queue {
             // Render the first mesh in the queue
             unsafe {
                 // Bind the vertex buffer
@@ -364,7 +366,7 @@ impl Renderer {
 
                 // Bind the texture
                 if mesh.material.is_some() {
-                    gl::BindTexture(gl::TEXTURE_2D, mesh.material.unwrap().tex_alb as u32);
+                    gl::BindTexture(gl::TEXTURE_2D, mesh.material.clone().unwrap().tex_alb as u32);
                 } else {
                     gl::BindTexture(gl::TEXTURE_2D, 0);
                 }
@@ -473,9 +475,9 @@ impl Renderer {
 
                 // Fill the screen with the ray direction
                 self.framebuffer_cpu[(x + y * resolution.0) as usize] = Pixel32 {
-                    r: ((forward_vec.x + 1.0) * 127.0).clamp(0.0, 255.0) as u8,
-                    g: ((forward_vec.y + 1.0) * 127.0).clamp(0.0, 255.0) as u8,
-                    b: ((forward_vec.z + 1.0) * 127.0).clamp(0.0, 255.0) as u8,
+                    r: ((forward_vec.x) * 255.0).clamp(0.0, 255.0) as u8,
+                    g: ((forward_vec.y) * 255.0).clamp(0.0, 255.0) as u8,
+                    b: ((forward_vec.z) * 255.0).clamp(0.0, 255.0) as u8,
                     a: 255,
                 };
 
@@ -483,17 +485,16 @@ impl Renderer {
                 let ray = Ray::new(self.camera_position, forward_vec, None);
 
                 // Loop over each mesh in the mesh queue
-                while let Ok(mesh) = self.mesh_queue.remove() {
-                    if let Some(bvh) = mesh.bvh {
+                for mesh in &self.mesh_queue {
+                    if let Some(bvh) = mesh.bvh.clone() {
                         let bvh = bvh.as_ref();
                         if let Some(hit_info) = bvh.intersects(&ray) {
                             self.framebuffer_cpu[(x + y * resolution.0) as usize] = Pixel32 {
-                                r: 255,
-                                g: 255,
-                                b: 255,
+                                r: ((hit_info.normal.x + 1.0) * 127.0) as u8,
+                                g: ((hit_info.normal.y + 1.0) * 127.0) as u8,
+                                b: ((hit_info.normal.z + 1.0) * 127.0) as u8,
                                 a: 255,
                             };
-                            println!("w hit sometihng");
                         }
                     }
                 }
@@ -544,7 +545,7 @@ impl Renderer {
         }
 
         // Render mesh queue
-        while let Ok(_mesh) = self.mesh_queue.remove() {
+        for mesh in &self.mesh_queue {
             // Render the first mesh in the queue
             // todo
         }
@@ -820,7 +821,7 @@ impl Renderer {
         }
         for (name, mesh) in &self.models.get(model_id).unwrap().meshes.clone() {
             self.mesh_queue
-                .add(MeshQueueEntry {
+                .push(MeshQueueEntry {
                     vao: mesh.vao,
                     vbo: mesh.vbo,
                     n_vertices: mesh.verts.len() as i32,
@@ -832,19 +833,22 @@ impl Renderer {
                         .get(name)
                         .cloned(),
                     bvh: mesh.bvh.clone(),
-                })
-                .expect("Failed to add mesh to mesh queue");
+                });
             let bvh = mesh.bvh.clone().unwrap();
             self.draw_bvh(bvh, Vec4::new(1.0, 1.0, 1.0, 1.0));
         }
     }
 
     pub fn draw_bvh(&mut self, bvh: Arc<Bvh>, color: Vec4) {
-        self.draw_bvh_sub(&bvh.nodes[0], color);
+        self.draw_bvh_sub(bvh.clone(), &bvh.nodes[0], color);
     }
     
-    fn draw_bvh_sub(&mut self, node: &BvhNode, color: Vec4) {
+    fn draw_bvh_sub(&mut self, bvh: Arc<Bvh>, node: &BvhNode, color: Vec4) {
         self.draw_aabb(&node.bounds, color);
+        if node.count == 0 {
+            self.draw_bvh_sub(bvh.clone(), &bvh.clone().nodes[node.left_first as usize], color);
+            self.draw_bvh_sub(bvh.clone(), &bvh.clone().nodes[node.left_first as usize + 1], color);
+        }
     }
 
     pub fn draw_line(&mut self, p1: Vec3, p2: Vec3, color: Vec4) {
