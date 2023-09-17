@@ -108,7 +108,7 @@ impl Renderer {
             quad_vao: 0,
             fbo_shader: 0,
             window_resolution_prev: [0, 0],
-            mode: RenderMode::Raytraced,
+            mode: RenderMode::Rasterized,
         };
 
         // Load shaders
@@ -279,43 +279,6 @@ impl Renderer {
 			gl::BindTexture(gl::TEXTURE_2D, 0);
 		}
     }
-
-	fn end_frame_raytrace_gpu(&mut self) {
-        // Enable depth testing
-        unsafe {
-            gl::Enable(gl::DEPTH_TEST);
-            gl::Enable(gl::CULL_FACE);
-            gl::UseProgram(self.triangle_shader);
-        }
-
-        // Render mesh queue
-        while let Ok(mesh) = self.mesh_queue.remove() {
-            // Render the first mesh in the queue
-			
-        }
-		
-		// Render compute shader test
-		let resolution = self.window.get_framebuffer_size();
-		unsafe {
-			gl::UseProgram(self.raytracing_shader);
-			gl::BindImageTexture(0, self.framebuffer_texture, 0, gl::FALSE, 0, gl::READ_WRITE, gl::RGBA16F);
-			gl::DispatchCompute(resolution.0 as _, resolution.1 as _, 1);
-			gl::MemoryBarrier(gl::SHADER_IMAGE_ACCESS_BARRIER_BIT);
-		}
-
-		// Render to window buffer
-		unsafe {
-			gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
-			gl::Viewport(0, 0, self.window_resolution_prev[0], self.window_resolution_prev[1]);
-            gl::Disable(gl::DEPTH_TEST);
-            gl::Disable(gl::CULL_FACE);
-			gl::UseProgram(self.fbo_shader);
-			gl::BindTexture(gl::TEXTURE_2D, self.framebuffer_texture);
-			gl::BindVertexArray(self.quad_vao);
-			gl::DrawArrays(gl::TRIANGLES, 0, 6);
-			gl::BindTexture(gl::TEXTURE_2D, 0);
-		}
-	}
 
 	fn end_frame_raytrace_cpu(&mut self) {
         // Enable depth testing
