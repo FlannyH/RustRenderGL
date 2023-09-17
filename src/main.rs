@@ -61,8 +61,7 @@ fn main() {
             counter = 0;
             if renderer.mode == RenderMode::Rasterized {
                 renderer.mode = RenderMode::RaytracedCPU;
-            }
-            else if renderer.mode == RenderMode::RaytracedCPU {
+            } else if renderer.mode == RenderMode::RaytracedCPU {
                 renderer.mode = RenderMode::Rasterized;
             }
         }

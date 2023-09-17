@@ -328,21 +328,21 @@ impl Model {
             );
         }
 
-		// Build BVH
-		model.meshes.iter_mut().for_each(|(_name, mesh)| {
-			// First, clone all the triangles to a separate vector
-			let mut triangles = Vec::new();
-			for triangle_vertices in mesh.verts.chunks(3) {
-				triangles.push(Triangle {
-					v0: triangle_vertices[0],
-					v1: triangle_vertices[1],
-					v2: triangle_vertices[2],
-				})
-			}
+        // Build BVH
+        model.meshes.iter_mut().for_each(|(_name, mesh)| {
+            // First, clone all the triangles to a separate vector
+            let mut triangles = Vec::new();
+            for triangle_vertices in mesh.verts.chunks(3) {
+                triangles.push(Triangle {
+                    v0: triangle_vertices[0],
+                    v1: triangle_vertices[1],
+                    v2: triangle_vertices[2],
+                })
+            }
 
-			// Now we create a new BVH
-			mesh.bvh = Some(Arc::new(Bvh::construct(triangles)));
-		});
+            // Now we create a new BVH
+            mesh.bvh = Some(Arc::new(Bvh::construct(triangles)));
+        });
 
         Ok(model)
     }

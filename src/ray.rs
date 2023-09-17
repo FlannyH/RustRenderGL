@@ -84,8 +84,7 @@ impl Bvh {
         self.intersects_sub(ray, 0, &mut hit_info);
         if hit_info.distance == f32::INFINITY {
             None
-        }
-        else {
+        } else {
             Some(hit_info)
         }
     }

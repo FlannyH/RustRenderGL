@@ -387,25 +387,26 @@ impl Renderer {
         // For now, we just make a buffer with random data in it
         let resolution = self.window.get_framebuffer_size();
         for y in 0..resolution.1 {
-			for x in 0..resolution.0 {
+            for x in 0..resolution.0 {
                 // Get UV coordinates from the X, Y position on screen
-				let u = ((x as f32 / resolution.0 as f32) * 2.0) - 1.0;
-				let v = ((y as f32 / resolution.1 as f32) * 2.0) - 1.0;
+                let u = ((x as f32 / resolution.0 as f32) * 2.0) - 1.0;
+                let v = ((y as f32 / resolution.1 as f32) * 2.0) - 1.0;
 
                 // Get the ray direction from the UV coordinates
-				let forward_vec = Vec3 {
-					x: self.viewport_width * u,
-					y: self.viewport_height * v,
-					z: self.viewport_depth,
-				}.normalize();
+                let forward_vec = Vec3 {
+                    x: self.viewport_width * u,
+                    y: self.viewport_height * v,
+                    z: self.viewport_depth,
+                }
+                .normalize();
 
                 // Fill the screen with the ray direction
-				self.framebuffer_cpu[(x + y * resolution.0) as usize] = Pixel32 {
-					r: ((forward_vec.x + 1.0) * 127.0).clamp(0.0, 255.0) as u8,
-					g: ((forward_vec.y + 1.0) * 127.0).clamp(0.0, 255.0) as u8,
-					b: ((forward_vec.z + 1.0) * 127.0).clamp(0.0, 255.0) as u8,
-					a: 255,
-				};
+                self.framebuffer_cpu[(x + y * resolution.0) as usize] = Pixel32 {
+                    r: ((forward_vec.x + 1.0) * 127.0).clamp(0.0, 255.0) as u8,
+                    g: ((forward_vec.y + 1.0) * 127.0).clamp(0.0, 255.0) as u8,
+                    b: ((forward_vec.z + 1.0) * 127.0).clamp(0.0, 255.0) as u8,
+                    a: 255,
+                };
 
                 // Create a ray
                 let ray = Ray::new(self.camera_position, forward_vec, None);
@@ -425,8 +426,8 @@ impl Renderer {
                         }
                     }
                 }
-			}
-		}
+            }
+        }
         unsafe {
             gl::BindTexture(gl::TEXTURE_2D, self.framebuffer_cpu_to_gpu);
             gl::TexImage2D(
@@ -756,7 +757,8 @@ impl Renderer {
                         .get(model_id)
                         .unwrap()
                         .materials
-                        .get(name).cloned(),
+                        .get(name)
+                        .cloned(),
                     bvh: mesh.bvh.clone(),
                 })
                 .expect("Failed to add mesh to mesh queue");
