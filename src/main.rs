@@ -15,6 +15,7 @@ mod texture;
 use std::path::Path;
 
 use camera::Camera;
+use glam::{Vec4, Vec3};
 use graphics::Renderer;
 use input::UserInput;
 
@@ -45,7 +46,6 @@ fn main() {
     );
 
     // Main loop
-    let mut counter = 0;
     loop {
         if renderer.should_close() {
             break;
@@ -55,6 +55,24 @@ fn main() {
         renderer.update_camera(&camera);
         renderer.begin_frame();
         renderer.draw_model(&model_spyro);
+        // Right line
+        renderer.draw_line(
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(4.0, 0.0, 0.0),
+            Vec4::new(1.0, 0.0, 0.0, 1.0)
+        );
+        // Up line
+        renderer.draw_line(
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(0.0, 4.0, 0.0),
+            Vec4::new(0.0, 1.0, 0.0, 1.0)
+        );
+        // Forward line
+        renderer.draw_line(
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(0.0, 0.0, 4.0),
+            Vec4::new(0.0, 0.0, 1.0, 1.0)
+        );
         renderer.end_frame();
 
         println!("player pos {:?}", camera.transform.translation);
