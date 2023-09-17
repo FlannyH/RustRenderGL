@@ -1,17 +1,17 @@
 #![allow(clippy::identity_op)]
 #![allow(clippy::needless_return)]
 
+mod aabb;
+mod bvh;
 mod camera;
 mod graphics;
+mod helpers;
 mod input;
 mod material;
 mod mesh;
+mod ray;
 mod structs;
 mod texture;
-mod helpers;
-mod bvh;
-mod aabb;
-mod ray;
 use std::path::Path;
 
 use camera::Camera;
@@ -22,9 +22,8 @@ use structs::Transform;
 
 fn main() {
     // Create renderer and input
-    let mut renderer = 
-        Renderer::new(1280, 720, "FlanRustRenderer (OpenGL)")
-            .expect("Failed to initialize renderer");
+    let mut renderer = Renderer::new(1280, 720, "FlanRustRenderer (OpenGL)")
+        .expect("Failed to initialize renderer");
     let mut user_input = UserInput::new();
 
     // Upload the mesh to the GPU

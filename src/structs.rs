@@ -11,9 +11,9 @@ pub struct Vertex {
 }
 
 pub struct Triangle {
-	pub v0: Vertex,
-	pub v1: Vertex,
-	pub v2: Vertex,
+    pub v0: Vertex,
+    pub v1: Vertex,
+    pub v2: Vertex,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -33,14 +33,14 @@ pub struct Transform {
 
 #[derive(Debug, Clone)]
 pub struct Pixel32 {
-	pub r: u8,
-	pub g: u8,
-	pub b: u8,
-	pub a: u8,
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: u8,
 }
 
 impl FragIn {
-	#[allow(dead_code)]
+    #[allow(dead_code)]
     pub fn lerp(&self, rhs: FragIn, t: f32) -> FragIn {
         FragIn {
             position: self.position.lerp(rhs.position, t),
@@ -57,7 +57,7 @@ impl Transform {
         self.rotation * Vec3::X
     }
 
-	#[allow(dead_code)]
+    #[allow(dead_code)]
     pub fn up(&self) -> Vec3 {
         self.rotation * Vec3::Y
     }
@@ -72,7 +72,7 @@ impl Transform {
             glam::vec3(0.0, 1.0, 0.0),
         )
     }
-	#[allow(dead_code)]
+    #[allow(dead_code)]
     pub fn trans_matrix(&self) -> Mat4 {
         Mat4::from_scale_rotation_translation(self.scale, self.rotation, self.translation)
     }

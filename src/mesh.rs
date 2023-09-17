@@ -312,7 +312,10 @@ impl Model {
 
             // Get the texture data
             if let Some(tex) = tex_info_alb {
-                new_material.tex_alb = renderer.upload_texture(&mut Texture::load_texture_from_gltf_image(&image_data[tex.texture().source().index()])) as i32;            
+                new_material.tex_alb =
+                    renderer.upload_texture(&mut Texture::load_texture_from_gltf_image(
+                        &image_data[tex.texture().source().index()],
+                    )) as i32;
             }
 
             model.materials.insert(
