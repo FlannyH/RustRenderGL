@@ -1,5 +1,5 @@
 use gl::types::GLenum;
-use glam::{Mat4, Vec3};
+use glam::{Mat4, Vec3, Vec4};
 use glfw::{Context, Glfw, Window, WindowEvent};
 use memoffset::offset_of;
 use queues::{queue, IsQueue, Queue};
@@ -18,6 +18,7 @@ use std::{
     sync::mpsc::Receiver,
 };
 
+use crate::aabb::AABB;
 use crate::bvh::Bvh;
 use crate::ray::Ray;
 use crate::structs::Transform;
@@ -57,9 +58,11 @@ pub struct Renderer {
 
     // Mesh render queue
     mesh_queue: Queue<MeshQueueEntry>,
+    line_queue: Vec<LineQueueEntry>,
 
     // Main triangle shader
     triangle_shader: u32,
+    line_shader: u32,
 
     // Raytracing stuff
     raytracing_shader: u32,
@@ -70,6 +73,7 @@ pub struct Renderer {
     camera_position: Vec3,
     camera_rotation_euler: Vec3,
     fov: f32, // in radians
+    aspect_ratio: f32, 
     viewport_height: f32,
     viewport_width: f32,
     viewport_depth: f32,
@@ -86,6 +90,12 @@ pub struct MeshQueueEntry {
     n_vertices: i32,
     material: Option<crate::material::Material>,
     bvh: Option<Arc<Bvh>>,
+}
+
+#[derive(Clone)]
+pub struct LineQueueEntry {
+    position: Vec3,
+    color: Vec4
 }
 
 pub struct GlobalConstBuffer {
@@ -127,37 +137,44 @@ impl Renderer {
             quad_vao: 0,
             fbo_shader: 0,
             window_resolution_prev: [0, 0],
-            mode: RenderMode::RaytracedCPU,
+            mode: RenderMode::Rasterized,
             models: HashMap::new(),
             mesh_queue: queue![],
+            line_queue: vec![],
             triangle_shader: 0,
+            line_shader: 0,
             raytracing_shader: 0,
             framebuffer_cpu: Vec::new(),
+            framebuffer_cpu_to_gpu: 0,
+            camera_position: Vec3::ZERO,
+            camera_rotation_euler: Vec3::ZERO,
+            fov: 0.0,
+            viewport_height: 0.0,
+            viewport_width: 0.0,
+            viewport_depth: -1.0,
             const_buffer_cpu: GlobalConstBuffer {
                 view_projection_matrix: Mat4::IDENTITY,
             },
             const_buffer_gpu: 0,
-            framebuffer_cpu_to_gpu: 0,
-            fov: 0.0,
-            viewport_height: 0.0,
-            viewport_width: 0.0,
-            viewport_depth: 1.0,
-            camera_position: Vec3::ZERO,
-            camera_rotation_euler: Vec3::ZERO,
+            aspect_ratio: 0.0,
         };
 
         // Set FOV
         renderer.fov = 90.0_f32.to_radians();
+        renderer.aspect_ratio = (width as f32 / height as f32);
         renderer.viewport_height = (renderer.fov * 0.5).tan();
-        renderer.viewport_width = renderer.viewport_height * (width as f32 / height as f32);
+        renderer.viewport_width = renderer.viewport_height * renderer.aspect_ratio;
 
         // Load shaders
         renderer.fbo_shader = renderer
-            .load_shader(Path::new("assets/shaders/fbo"))
-            .expect("Shader loading failed");
-        renderer.triangle_shader = renderer
-            .load_shader(Path::new("assets/shaders/lit"))
-            .expect("Shader loading failed!");
+        .load_shader(Path::new("assets/shaders/fbo"))
+        .expect("Shader loading failed");
+    renderer.triangle_shader = renderer
+        .load_shader(Path::new("assets/shaders/lit"))
+        .expect("Shader loading failed!");
+    renderer.line_shader = renderer
+        .load_shader(Path::new("assets/shaders/line"))
+        .expect("Shader loading failed!");
         renderer.raytracing_shader = renderer
             .load_shader_compute(Path::new("assets/shaders/test.comp"))
             .expect("Shader loading failed!");
@@ -284,7 +301,7 @@ impl Renderer {
     pub fn update_camera(&mut self, camera: &Camera) {
         // Update CPU-side buffer
         let view_matrix = camera.transform.view_matrix();
-        let proj_matrix = Mat4::perspective_rh(PI / 4.0, 16.0 / 9.0, 0.1, 1000.0);
+        let proj_matrix = Mat4::perspective_rh(PI / 4.0, self.aspect_ratio, 0.1, 1000.0);
         self.const_buffer_cpu.view_projection_matrix = proj_matrix * view_matrix;
 
         // Update GPU-side buffer
@@ -357,6 +374,58 @@ impl Renderer {
             }
         }
 
+        // Render line queue
+        if !self.line_queue.is_empty() {
+        unsafe {
+                // Create GPU buffers
+                let mut vao = 0;
+                let mut vbo = 0;
+                gl::UseProgram(self.line_shader);
+                gl::GenVertexArrays(1, &mut vao);
+                gl::GenBuffers(1, &mut vbo);
+
+                // Bind GPU buffers
+                gl::BindVertexArray(vao);
+                gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
+
+                // Define vertex layout
+                gl::VertexAttribPointer(
+                    0,
+                    3,
+                    gl::FLOAT,
+                    gl::FALSE,
+                    size_of::<LineQueueEntry>() as i32,
+                    offset_of!(LineQueueEntry, position) as *const _,
+                );
+                gl::VertexAttribPointer(
+                    1,
+                    4,
+                    gl::FLOAT,
+                    gl::TRUE,
+                    size_of::<LineQueueEntry>() as i32,
+                    offset_of!(LineQueueEntry, color) as *const _,
+                );
+
+                // Enable each attribute
+                gl::EnableVertexAttribArray(0);
+                gl::EnableVertexAttribArray(1);
+
+                // Populate vertex buffer
+                gl::BufferData(
+                    gl::ARRAY_BUFFER,
+                    (size_of::<LineQueueEntry>() * self.line_queue.len()) as isize,
+                    &self.line_queue[0] as *const LineQueueEntry as *const c_void,
+                    gl::STATIC_DRAW,
+                );
+
+                gl::DrawArrays(gl::LINES, 0, self.line_queue.len() as _);
+
+                // Unbind buffer
+                gl::BindVertexArray(0);
+                gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+        }
+    }
+
         // Render to window buffer
         unsafe {
             gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
@@ -385,7 +454,9 @@ impl Renderer {
         }
 
         // For now, we just make a buffer with random data in it
-        let resolution = self.window.get_framebuffer_size();
+        let mut resolution = self.window.get_framebuffer_size();
+        resolution.0 /= 3;
+        resolution.1 /= 3;
         for y in 0..resolution.1 {
             for x in 0..resolution.0 {
                 // Get UV coordinates from the X, Y position on screen
@@ -518,6 +589,7 @@ impl Renderer {
         // Update OpenGL framebuffer resolution
         let window_resolution = self.window.get_framebuffer_size();
         let window_resolution = [window_resolution.0, window_resolution.1];
+        self.aspect_ratio = window_resolution[0] as f32 / window_resolution[1] as f32;
         if window_resolution != self.window_resolution_prev {
             Self::resize_texture(
                 &mut self.framebuffer_texture,
@@ -566,7 +638,7 @@ impl Renderer {
         // Update software framebuffer resolution
         self.framebuffer_cpu.clear();
         self.framebuffer_cpu.resize(
-            (window_resolution[0] * window_resolution[1]) as usize,
+            (window_resolution[0] / 3 * window_resolution[1] / 3) as usize,
             Pixel32 {
                 r: 0,
                 g: 0,
@@ -762,7 +834,49 @@ impl Renderer {
                     bvh: mesh.bvh.clone(),
                 })
                 .expect("Failed to add mesh to mesh queue");
+            
+            Self::draw_bvh(mesh.bvh.clone().unwrap().as_ref(), Vec4::new(1.0, 1.0, 1.0, 1.0));
         }
+    }
+
+    pub fn draw_bvh(bvh: &Bvh, color: Vec4) {
+
+    }
+
+    pub fn draw_line(&mut self, p1: Vec3, p2: Vec3, color: Vec4) {
+        self.line_queue.push(LineQueueEntry {
+            position: p1,
+            color
+        });        self.line_queue.push(LineQueueEntry {
+            position: p2,
+            color
+        });
+    }
+
+    pub fn draw_aabb(&mut self, aabb: &AABB, color: Vec4) {    // Create 8 vertices
+        let vertex000 = Vec3 { x: aabb.min.x, y: aabb.min.y, z: aabb.min.z };
+        let vertex001 = Vec3 { x: aabb.min.x, y: aabb.min.y, z: aabb.max.z };
+        let vertex010 = Vec3 { x: aabb.min.x, y: aabb.max.y, z: aabb.min.z };
+        let vertex011 = Vec3 { x: aabb.min.x, y: aabb.max.y, z: aabb.max.z };
+        let vertex100 = Vec3 { x: aabb.max.x, y: aabb.min.y, z: aabb.min.z };
+        let vertex101 = Vec3 { x: aabb.max.x, y: aabb.min.y, z: aabb.max.z };
+        let vertex110 = Vec3 { x: aabb.max.x, y: aabb.max.y, z: aabb.min.z };
+        let vertex111 = Vec3 { x: aabb.max.x, y: aabb.max.y, z: aabb.max.z };
+    
+        // Draw the lines
+        self.draw_line(vertex000, vertex100, color);
+        self.draw_line(vertex100, vertex101, color);
+        self.draw_line(vertex101, vertex001, color);
+        self.draw_line(vertex001, vertex000, color);
+        self.draw_line(vertex010, vertex110, color);
+        self.draw_line(vertex110, vertex111, color);
+        self.draw_line(vertex111, vertex011, color);
+        self.draw_line(vertex011, vertex010, color);
+        self.draw_line(vertex000, vertex010, color);
+        self.draw_line(vertex100, vertex110, color);
+        self.draw_line(vertex101, vertex111, color);
+        self.draw_line(vertex001, vertex011, color);
+    
     }
 
     pub fn load_shader(&mut self, path: &Path) -> Result<u32, &str> {

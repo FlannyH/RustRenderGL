@@ -56,15 +56,8 @@ fn main() {
         renderer.begin_frame();
         renderer.draw_model(&model_spyro);
         renderer.end_frame();
-        counter += 1;
-        if counter == 60 {
-            counter = 0;
-            if renderer.mode == RenderMode::Rasterized {
-                renderer.mode = RenderMode::RaytracedCPU;
-            } else if renderer.mode == RenderMode::RaytracedCPU {
-                renderer.mode = RenderMode::Rasterized;
-            }
-        }
+
         println!("player pos {:?}", camera.transform.translation);
+        println!("player rot {}, {}", camera.pitch, camera.yaw);
     }
 }
