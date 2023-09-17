@@ -301,7 +301,7 @@ impl Renderer {
     pub fn update_camera(&mut self, camera: &Camera) {
         // Update CPU-side buffer
         let view_matrix = camera.transform.view_matrix();
-        let proj_matrix = Mat4::perspective_rh(PI / 4.0, self.aspect_ratio, 0.1, 1000.0);
+        let proj_matrix = Mat4::perspective_rh(self.fov, self.aspect_ratio, 0.1, 1000.0);
         self.const_buffer_cpu.view_projection_matrix = proj_matrix * view_matrix;
 
         // Update GPU-side buffer
@@ -834,8 +834,6 @@ impl Renderer {
                         .cloned(),
                     bvh: mesh.bvh.clone(),
                 });
-            let bvh = mesh.bvh.clone().unwrap();
-            self.draw_bvh(bvh, Vec4::new(1.0, 1.0, 1.0, 1.0));
         }
     }
 

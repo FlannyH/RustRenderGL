@@ -16,6 +16,7 @@ use std::path::Path;
 
 use camera::Camera;
 use glam::{Vec4, Vec3};
+use glfw::Key;
 use graphics::Renderer;
 use input::UserInput;
 
@@ -74,6 +75,12 @@ fn main() {
             Vec4::new(0.0, 0.0, 1.0, 1.0)
         );
         renderer.end_frame();
+        if user_input.is_key_down(Key::Num1) {
+            renderer.mode = RenderMode::Rasterized;
+        }
+        if user_input.is_key_down(Key::Num2) {
+            renderer.mode = RenderMode::RaytracedCPU;
+        }
 
         println!("player pos {:?}", camera.transform.translation);
         println!("player rot {}, {}", camera.pitch, camera.yaw);
