@@ -20,6 +20,8 @@ use input::UserInput;
 
 use structs::Transform;
 
+use crate::graphics::RenderMode;
+
 fn main() {
     // Create renderer and input
     let mut renderer = Renderer::new(1280, 720, "FlanRustRenderer (OpenGL)")
@@ -28,7 +30,7 @@ fn main() {
 
     // Upload the mesh to the GPU
     let model_spyro = renderer
-        .load_model(Path::new("assets/models/spyro.gltf"))
+        .load_model(Path::new("assets/models/bvh_test_tiny.gltf"))
         .expect("Failed to upload model!");
 
     // Create a camera
@@ -43,6 +45,7 @@ fn main() {
     );
 
     // Main loop
+    let mut counter = 0;
     loop {
         if renderer.should_close() {
             break;
@@ -53,5 +56,16 @@ fn main() {
         renderer.begin_frame();
         renderer.draw_model(&model_spyro);
         renderer.end_frame();
+        counter += 1;
+        if counter == 60 {
+            counter = 0;
+            if renderer.mode == RenderMode::Rasterized {
+                renderer.mode = RenderMode::RaytracedCPU;
+            }
+            else if renderer.mode == RenderMode::RaytracedCPU {
+                renderer.mode = RenderMode::Rasterized;
+            }
+        }
+        println!("player pos {:?}", camera.transform.translation);
     }
 }

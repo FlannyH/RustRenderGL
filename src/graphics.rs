@@ -4,6 +4,7 @@ use glfw::{Context, Glfw, Window, WindowEvent};
 use memoffset::offset_of;
 use queues::{queue, IsQueue, Queue};
 use std::hash::Hash;
+use std::sync::Arc;
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     f32::consts::PI,
@@ -17,6 +18,9 @@ use std::{
     sync::mpsc::Receiver,
 };
 
+use crate::bvh::Bvh;
+use crate::ray::Ray;
+use crate::structs::Transform;
 use crate::{
     camera::Camera,
     input::UserInput,
@@ -26,6 +30,7 @@ use crate::{
 };
 
 #[allow(dead_code)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum RenderMode {
     None,
     Rasterized,
@@ -45,7 +50,7 @@ pub struct Renderer {
     quad_vao: u32,
     fbo_shader: u32,
     window_resolution_prev: [i32; 2],
-    mode: RenderMode,
+    pub mode: RenderMode,
 
     // Resources
     models: HashMap<u64, Model>,
@@ -62,6 +67,8 @@ pub struct Renderer {
     framebuffer_cpu_to_gpu: u32,
 
     // Camera
+    camera_position: Vec3,
+    camera_rotation_euler: Vec3,
     fov: f32, // in radians
     viewport_height: f32,
     viewport_width: f32,
@@ -77,7 +84,8 @@ pub struct MeshQueueEntry {
     vao: u32,
     vbo: u32,
     n_vertices: i32,
-    material: crate::material::Material,
+    material: Option<crate::material::Material>,
+    bvh: Option<Arc<Bvh>>,
 }
 
 pub struct GlobalConstBuffer {
@@ -134,6 +142,8 @@ impl Renderer {
             viewport_height: 0.0,
             viewport_width: 0.0,
             viewport_depth: 1.0,
+            camera_position: Vec3::ZERO,
+            camera_rotation_euler: Vec3::ZERO,
         };
 
         // Set FOV
@@ -288,6 +298,9 @@ impl Renderer {
             );
             gl::BindBuffer(gl::UNIFORM_BUFFER, 0);
         }
+
+        // Update raytrace CPU buffer
+        self.camera_position = camera.transform.translation;
     }
 
     pub fn begin_frame(&mut self) {
@@ -333,7 +346,11 @@ impl Renderer {
                 gl::BindBufferBase(gl::UNIFORM_BUFFER, 0, self.const_buffer_gpu);
 
                 // Bind the texture
-                gl::BindTexture(gl::TEXTURE_2D, mesh.material.tex_alb as u32);
+                if mesh.material.is_some() {
+                    gl::BindTexture(gl::TEXTURE_2D, mesh.material.unwrap().tex_alb as u32);
+                } else {
+                    gl::BindTexture(gl::TEXTURE_2D, 0);
+                }
 
                 // Draw the model
                 gl::DrawArrays(gl::TRIANGLES, 0, mesh.n_vertices);
@@ -371,19 +388,43 @@ impl Renderer {
         let resolution = self.window.get_framebuffer_size();
         for y in 0..resolution.1 {
 			for x in 0..resolution.0 {
+                // Get UV coordinates from the X, Y position on screen
 				let u = ((x as f32 / resolution.0 as f32) * 2.0) - 1.0;
 				let v = ((y as f32 / resolution.1 as f32) * 2.0) - 1.0;
+
+                // Get the ray direction from the UV coordinates
 				let forward_vec = Vec3 {
 					x: self.viewport_width * u,
 					y: self.viewport_height * v,
 					z: self.viewport_depth,
 				}.normalize();
+
+                // Fill the screen with the ray direction
 				self.framebuffer_cpu[(x + y * resolution.0) as usize] = Pixel32 {
 					r: ((forward_vec.x + 1.0) * 127.0).clamp(0.0, 255.0) as u8,
 					g: ((forward_vec.y + 1.0) * 127.0).clamp(0.0, 255.0) as u8,
 					b: ((forward_vec.z + 1.0) * 127.0).clamp(0.0, 255.0) as u8,
 					a: 255,
 				};
+
+                // Create a ray
+                let ray = Ray::new(self.camera_position, forward_vec, None);
+
+                // Loop over each mesh in the mesh queue
+                while let Ok(mesh) = self.mesh_queue.remove() {
+                    if let Some(bvh) = mesh.bvh {
+                        let bvh = bvh.as_ref();
+                        if let Some(hit_info) = bvh.intersects(&ray) {
+                            self.framebuffer_cpu[(x + y * resolution.0) as usize] = Pixel32 {
+                                r: 255,
+                                g: 255,
+                                b: 255,
+                                a: 255,
+                            };
+                            println!("w hit sometihng");
+                        }
+                    }
+                }
 			}
 		}
         unsafe {
@@ -419,6 +460,7 @@ impl Renderer {
             gl::DrawArrays(gl::TRIANGLES, 0, 6);
             gl::BindTexture(gl::TEXTURE_2D, 0);
         }
+        println!("frame rendered succesfully");
     }
 
     fn end_frame_raytrace_gpu(&mut self) {
@@ -714,9 +756,8 @@ impl Renderer {
                         .get(model_id)
                         .unwrap()
                         .materials
-                        .get(name)
-                        .unwrap()
-                        .clone(),
+                        .get(name).cloned(),
+                    bvh: mesh.bvh.clone(),
                 })
                 .expect("Failed to add mesh to mesh queue");
         }

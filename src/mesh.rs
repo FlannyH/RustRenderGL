@@ -1,16 +1,19 @@
+use crate::bvh::Bvh;
 use crate::graphics::Renderer;
 use crate::material::Material;
-use crate::structs::Transform;
+use crate::structs::{Transform, Triangle};
 use crate::{structs::Vertex, texture::Texture};
 use glam::Vec4Swizzles;
 use glam::{Mat4, Vec2, Vec3, Vec4};
 use gltf::buffer::Data;
+use std::sync::Arc;
 use std::{collections::HashMap, path::Path};
 
 pub struct Mesh {
     pub verts: Vec<Vertex>,
     pub vao: u32,
     pub vbo: u32,
+    pub bvh: Option<Arc<Bvh>>, // Used exclusively in raytracing
 }
 
 pub struct Model {
@@ -170,6 +173,7 @@ fn create_vertex_array(
         verts: Vec::new(),
         vao: 0,
         vbo: 0,
+        bvh: None,
     };
     for index in indices {
         let mut vertex = Vertex {
@@ -323,6 +327,23 @@ impl Model {
                 new_material,
             );
         }
+
+		// Build BVH
+		model.meshes.iter_mut().for_each(|(_name, mesh)| {
+			// First, clone all the triangles to a separate vector
+			let mut triangles = Vec::new();
+			for triangle_vertices in mesh.verts.chunks(3) {
+				triangles.push(Triangle {
+					v0: triangle_vertices[0],
+					v1: triangle_vertices[1],
+					v2: triangle_vertices[2],
+				})
+			}
+
+			// Now we create a new BVH
+			mesh.bvh = Some(Arc::new(Bvh::construct(triangles)));
+		});
+
         Ok(model)
     }
 

@@ -43,6 +43,7 @@ impl Bvh {
 
     fn subdivide(&mut self, node_index: usize, rec_depth: usize) {
         // Get node
+        let left = self.nodes.len();
         let node = &mut self.nodes[node_index];
 
         // Calculate node bounds
@@ -56,7 +57,8 @@ impl Bvh {
         }
 
         // Only subdivide if we have more than 2 triangles
-        if node.count <= 2 || rec_depth > 30 {
+        if node.count <= 30 || rec_depth > 30 {
+            println!("node {node_index} is a leaf node");
             return;
         }
 
@@ -86,16 +88,16 @@ impl Bvh {
         let node_left_first = node.left_first;
         let node_count = node.count;
         node.count = 0; // this is not a leaf node.
+        node.left_first = left as _; // this node has to point to the 2 child nodes
         let mut split_index = self.partition(split_axis, split_pos, node_left_first, node_count);
 
         // Create 2 child nodes
-        let left = node_left_first as usize;
         self.nodes.push(BvhNode {
             bounds: AABB::new(),
             left_first: node_left_first,
             count: split_index - node_left_first,
         });
-        let right = node_left_first as usize + 1;
+        let right = self.nodes.len();
         self.nodes.push(BvhNode {
             bounds: AABB::new(),
             left_first: split_index,

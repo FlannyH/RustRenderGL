@@ -82,9 +82,11 @@ impl Bvh {
             normal: Vec3::ZERO,
         };
         self.intersects_sub(ray, 0, &mut hit_info);
-        match hit_info.distance {
-            f32::INFINITY => None,
-            _ => Some(hit_info),
+        if hit_info.distance == f32::INFINITY {
+            None
+        }
+        else {
+            Some(hit_info)
         }
     }
 
@@ -110,10 +112,23 @@ impl Bvh {
                     }
                 }
             }
+            self.intersects_sub(ray, node.left_first + 0, hit_info);
+            self.intersects_sub(ray, node.left_first + 1, hit_info);
             return;
         }
+    }
+}
 
-        self.intersects_sub(ray, node.left_first + 0, hit_info);
-        self.intersects_sub(ray, node.left_first + 1, hit_info);
+impl Ray {
+    pub fn new(position: Vec3, direction: Vec3, length: Option<f32>) -> Self {
+        Self {
+            position,
+            direction,
+            one_over_direction: Vec3::ONE / direction,
+            length: match length {
+                Some(length) => length,
+                None => f32::INFINITY,
+            },
+        }
     }
 }
