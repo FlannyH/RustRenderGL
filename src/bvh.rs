@@ -4,8 +4,8 @@ use crate::{aabb::AABB, structs::Triangle};
 
 pub struct BvhNode {
     pub bounds: AABB,    // 24 bytes
-    pub left_first: u32, // 4 bytes - if leaf, specifies first primitive index, otherwise, specifies node offset
-    pub count: u32,      // 4 bytes - if non-zero, this is a leaf node
+    pub left_first: i32, // 4 bytes - if leaf, specifies first primitive index, otherwise, specifies node offset
+    pub count: i32,      // 4 bytes - if non-zero, this is a leaf node
 }
 
 pub struct Bvh {
@@ -50,7 +50,7 @@ impl Bvh {
         let begin = node.left_first;
         let end = begin + node.count;
         for i in begin..end {
-            let triangle = self.triangles.get(i as usize).unwrap();
+            let triangle = self.triangles.get(*self.indices.get(i as usize).unwrap() as usize).unwrap();
             node.bounds.grow(triangle.v0.position);
             node.bounds.grow(triangle.v1.position);
             node.bounds.grow(triangle.v2.position);
@@ -88,12 +88,16 @@ impl Bvh {
         // Partition the index array, and get the split position
         let start_index = node.left_first;
         let node_count = node.count;
-        node.count = 0; // this is not a leaf node.
+        node.count = -1; // this is not a leaf node.
         node.left_first = left as _; // this node has to point to the 2 child nodes
         let split_index = self.partition(split_axis, split_pos, start_index, node_count);
+        let node = &mut self.nodes[node_index];
 
         // Abort if one of the sides is empty
-        if split_index - start_index == 0 || split_index - start_index == node_count {return;}
+        if split_index - start_index == 0 || split_index - start_index == node_count {
+            node.count = node_count;
+            return;
+        }
         
         // Create 2 child nodes
         self.nodes.push(BvhNode {
@@ -113,7 +117,7 @@ impl Bvh {
         self.subdivide(right, rec_depth + 1);
     }
 
-    fn partition(&mut self, axis: Axis, pivot: f32, start: u32, count: u32) -> u32 {
+    fn partition(&mut self, axis: Axis, pivot: f32, start: i32, count: i32) -> i32 {
         let mut i = start;
         let mut j = start + count - 1;
         while i <= j {

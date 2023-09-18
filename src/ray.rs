@@ -89,13 +89,13 @@ impl Bvh {
         }
     }
 
-    fn intersects_sub(&self, ray: &Ray, node_index: u32, hit_info: &mut HitInfo) {
+    fn intersects_sub(&self, ray: &Ray, node_index: i32, hit_info: &mut HitInfo) {
         let node = &self.nodes[node_index as usize];
 
         // Intersect node bounding box
         if node.bounds.intersects(ray) {
             // If it's a leaf node
-            if node.count > 0 {
+            if node.count != -1 {
                 // Loop over all triangles it contains
                 let begin = node.left_first;
                 let end = node.left_first + node.count;
