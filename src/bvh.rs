@@ -1,3 +1,5 @@
+use std::mem::size_of;
+
 use glam::Vec3;
 
 use crate::{aabb::AABB, structs::Triangle};
@@ -12,6 +14,10 @@ pub struct Bvh {
     pub nodes: Vec<BvhNode>, // node 0 is always the root node
     pub indices: Vec<u32>,
     pub triangles: Vec<Triangle>,
+    pub gpu_nodes: u32, 
+    pub gpu_indices: u32, 
+    pub gpu_triangles: u32, 
+    pub gpu_counts: u32,
 }
 
 enum Axis {
@@ -27,6 +33,10 @@ impl Bvh {
             nodes: Vec::new(),
             indices: (0..triangles.len() as u32).collect(),
             triangles,
+            gpu_nodes: 0,
+            gpu_indices: 0,
+            gpu_triangles: 0,
+            gpu_counts: 0,
         };
 
         // Create root node
@@ -36,7 +46,33 @@ impl Bvh {
             count: new_bvh.triangles.len() as _,
         });
 
+        // Recursively break down into smaller nodes
         new_bvh.subdivide(0, 0);
+
+        // We're done, let's create buffers on the GPU
+        let cpu_counts = [new_bvh.nodes.len() as u32, new_bvh.indices.len() as u32];
+        unsafe {
+            // Nodes
+            gl::GenBuffers(1, &mut new_bvh.gpu_nodes);
+            gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, new_bvh.gpu_nodes);
+            gl::BufferStorage(gl::SHADER_STORAGE_BUFFER, (new_bvh.nodes.len() * size_of::<BvhNode>()) as isize, new_bvh.nodes.as_ptr() as _, gl::MAP_READ_BIT);
+            
+            // Indices
+            gl::GenBuffers(1, &mut new_bvh.gpu_indices);
+            gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, new_bvh.gpu_indices);
+            gl::BufferStorage(gl::SHADER_STORAGE_BUFFER, (new_bvh.indices.len() * size_of::<u32>()) as isize, new_bvh.indices.as_ptr() as _, gl::MAP_READ_BIT);
+            
+            // Triangles
+            gl::GenBuffers(1, &mut new_bvh.gpu_triangles);
+            gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, new_bvh.gpu_triangles);
+            gl::BufferStorage(gl::SHADER_STORAGE_BUFFER, (new_bvh.triangles.len() * size_of::<Triangle>()) as isize, new_bvh.triangles.as_ptr() as _, gl::MAP_READ_BIT);
+            
+            // Counts
+            gl::GenBuffers(1, &mut new_bvh.gpu_counts);
+            gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, new_bvh.gpu_counts);
+            gl::BufferStorage(gl::SHADER_STORAGE_BUFFER, (cpu_counts.len() * size_of::<u32>()) as isize, cpu_counts.as_ptr() as _, gl::MAP_READ_BIT);
+            gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, 0);
+        }
 
         return new_bvh;
     }

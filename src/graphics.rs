@@ -165,14 +165,14 @@ impl Renderer {
         renderer.fbo_shader = renderer
         .load_shader(Path::new("assets/shaders/fbo"))
         .expect("Shader loading failed");
-    renderer.triangle_shader = renderer
-        .load_shader(Path::new("assets/shaders/lit"))
-        .expect("Shader loading failed!");
-    renderer.line_shader = renderer
-        .load_shader(Path::new("assets/shaders/line"))
-        .expect("Shader loading failed!");
+        renderer.triangle_shader = renderer
+            .load_shader(Path::new("assets/shaders/lit"))
+            .expect("Shader loading failed!");
+        renderer.line_shader = renderer
+            .load_shader(Path::new("assets/shaders/line"))
+            .expect("Shader loading failed!");
         renderer.raytracing_shader = renderer
-            .load_shader_compute(Path::new("assets/shaders/test.comp"))
+            .load_shader_compute(Path::new("assets/shaders/ray.comp"))
             .expect("Shader loading failed!");
 
         // Create const buffer
