@@ -1,6 +1,8 @@
-use glam::Vec3;
+use std::ops::{Mul, Add};
 
-use crate::{aabb::AABB, bvh::Bvh, structs::Triangle};
+use glam::{Vec3, Vec2, Vec2Swizzles};
+
+use crate::{aabb::AABB, bvh::Bvh, structs::{Triangle, Vertex}};
 
 pub struct Ray {
     pub position: Vec3,
@@ -12,6 +14,19 @@ pub struct Ray {
 pub struct HitInfo {
     pub distance: f32,
     pub normal: Vec3,
+    pub uv: Vec2,
+    pub triangle_index: i32,
+}
+
+pub struct HitInfoExt {
+    pub distance: f32,
+    pub vertex_interpolated: Vertex,
+}
+
+impl Vertex {
+    pub fn from_triangle_with_uv(triangle: &Triangle, u: f32, v: f32) -> Self {
+        triangle.v0 + ((triangle.v1 - triangle.v0) * u) + ((triangle.v2 - triangle.v0) * v)
+    }
 }
 
 impl AABB {
@@ -45,7 +60,7 @@ impl Triangle {
         let h = ray.direction.cross(edge2);
         let det = edge1.dot(h);
 
-        if det == 0.0 {
+        if det <= 0.0 {
             return None;
         }
 
@@ -68,6 +83,8 @@ impl Triangle {
             return Some(HitInfo {
                 distance: t,
                 normal: edge1.cross(edge2).normalize(),
+                triangle_index: -1,
+                uv: Vec2{x: u, y: v},
             });
         }
 
@@ -76,16 +93,18 @@ impl Triangle {
 }
 
 impl Bvh {
-    pub fn intersects(&self, ray: &Ray) -> Option<HitInfo> {
+    pub fn intersects(&self, ray: &Ray) -> Option<HitInfoExt> {
         let mut hit_info = HitInfo {
             distance: f32::INFINITY,
             normal: Vec3::ZERO,
+            uv: Vec2::ZERO,
+            triangle_index: -1,
         };
         self.intersects_sub(ray, 0, &mut hit_info);
         if hit_info.distance == f32::INFINITY {
             None
         } else {
-            Some(hit_info)
+            Some(HitInfoExt{ distance: hit_info.distance, vertex_interpolated: Vertex::from_triangle_with_uv(self.triangles.get(hit_info.triangle_index as usize).unwrap(), hit_info.uv.x, hit_info.uv.y) })
         }
     }
 
@@ -107,6 +126,7 @@ impl Bvh {
                         if new_hit_info.distance < hit_info.distance && new_hit_info.distance >= 0.0 {
                             // If so, copy the new hit info data
                             *hit_info = new_hit_info;
+                            hit_info.triangle_index = self.indices[i as usize] as i32;
                         }
                     }
                 }

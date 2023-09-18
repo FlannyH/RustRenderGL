@@ -1,6 +1,9 @@
+use std::ops::{Sub, Add, Mul};
+
 use glam::{Mat4, Quat, Vec2, Vec3, Vec4};
 
 #[derive(Debug, Copy, Clone)]
+
 pub struct Vertex {
     pub position: Vec3,
     pub normal: Vec3,
@@ -77,5 +80,47 @@ impl Transform {
         Mat4::from_translation(self.translation)
             * Mat4::from_quat(self.rotation)
             * Mat4::from_scale(self.scale)
+    }
+}
+
+impl Mul<f32> for Vertex {
+    type Output = Vertex;
+    fn mul(self, rhs: f32) -> Self {
+        Self {
+            position: self.position * rhs,
+            normal: self.normal * rhs,
+            tangent: self.tangent * rhs,
+            colour: self.colour * rhs,
+            uv0: self.uv0 * rhs,
+            uv1: self.uv1 * rhs,
+        }
+    }
+}
+
+impl Add<Vertex> for Vertex {
+    type Output = Vertex;
+    fn add(self, rhs: Vertex) -> Self {
+        Self {
+            position: self.position + rhs.position,
+            normal: self.normal + rhs.normal,
+            tangent: self.tangent + rhs.tangent,
+            colour: self.colour + rhs.colour,
+            uv0: self.uv0 + rhs.uv0,
+            uv1: self.uv1 + rhs.uv1,
+        }
+    }
+}
+
+impl Sub<Vertex> for Vertex {
+    type Output = Vertex;
+    fn sub(self, rhs: Vertex) -> Self {
+        Self {
+            position: self.position - rhs.position,
+            normal: self.normal - rhs.normal,
+            tangent: self.tangent - rhs.tangent,
+            colour: self.colour - rhs.colour,
+            uv0: self.uv0 - rhs.uv0,
+            uv1: self.uv1 - rhs.uv1,
+        }
     }
 }

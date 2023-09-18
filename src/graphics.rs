@@ -453,8 +453,8 @@ impl Renderer {
 
         // For now, we just make a buffer with random data in it
         let mut resolution = self.window.get_framebuffer_size();
-        resolution.0 /= 3;
-        resolution.1 /= 3;
+        resolution.0 /= 1;
+        resolution.1 /= 1;
         for y in 0..resolution.1 {
             for x in 0..resolution.0 {
                 // Get UV coordinates from the X, Y position on screen
@@ -486,9 +486,9 @@ impl Renderer {
                         let bvh = bvh.as_ref();
                         if let Some(hit_info) = bvh.intersects(&ray) {
                             self.framebuffer_cpu[(x + y * resolution.0) as usize] = Pixel32 {
-                                r: ((hit_info.normal.x + 1.0) * 127.0) as u8,
-                                g: ((hit_info.normal.y + 1.0) * 127.0) as u8,
-                                b: ((hit_info.normal.z + 1.0) * 127.0) as u8,
+                                r: ((hit_info.vertex_interpolated.normal.x + 1.0) * 127.0) as u8,
+                                g: ((hit_info.vertex_interpolated.normal.y + 1.0) * 127.0) as u8,
+                                b: ((hit_info.vertex_interpolated.normal.z + 1.0) * 127.0) as u8,
                                 a: 255,
                             };
                         }
@@ -635,7 +635,7 @@ impl Renderer {
         // Update software framebuffer resolution
         self.framebuffer_cpu.clear();
         self.framebuffer_cpu.resize(
-            (window_resolution[0] / 3 * window_resolution[1] / 3) as usize,
+            (window_resolution[0] / 1 * window_resolution[1] / 1) as usize,
             Pixel32 {
                 r: 0,
                 g: 0,
