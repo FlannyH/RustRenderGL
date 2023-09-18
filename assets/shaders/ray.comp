@@ -40,21 +40,28 @@ layout(std430, binding = 2) buffer buf_triangles {
     Triangle triangles[];
 };
 
-layout (location = 0) uniform vec3 camera_pos;
-layout (location = 1) uniform vec3 camera_rot;
+layout (location = 0) uniform mat3 camera_rot;
+layout (location = 1) uniform vec3 camera_pos;
 layout (location = 2) uniform float viewport_width;
 layout (location = 3) uniform float viewport_height;
 layout (location = 4) uniform float viewport_depth;
 
 void main() {
+    // Get UV coordinates
 	ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
     ivec2 size = imageSize(img_input);
     vec2 uv = (vec2(pixel_coords) / vec2(size)) * 2.0 - 1.0;
+
+    // Calculate forward vector
     vec3 forward_vec = normalize(vec3(
         (viewport_width * uv.x), 
         (viewport_height * uv.y),
         viewport_depth
     ));
+
+    // Rotate it
+    forward_vec = forward_vec * camera_rot;
+    
 	vec4 pixel = vec4(forward_vec, 1.0);
 	imageStore(img_input, ivec2(pixel_coords.x, pixel_coords.y), pixel);
 }
