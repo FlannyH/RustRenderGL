@@ -4,6 +4,7 @@ use glam::Vec3;
 
 use crate::{aabb::AABB, structs::Triangle};
 
+#[repr(C)]
 pub struct BvhNode {
     pub bounds: AABB,    // 24 bytes
     pub left_first: i32, // 4 bytes - if leaf, specifies first primitive index, otherwise, specifies node offset

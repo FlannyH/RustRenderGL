@@ -1,5 +1,6 @@
 use glam::Vec3;
 
+#[repr(C)]
 pub struct AABB {
     pub min: Vec3,
     pub max: Vec3,

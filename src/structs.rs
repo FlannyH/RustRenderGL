@@ -4,6 +4,7 @@ use glam::{Mat4, Quat, Vec2, Vec3, Vec4};
 
 #[derive(Debug, Copy, Clone)]
 
+#[repr(C)]
 pub struct Vertex {
     pub position: Vec3,
     pub normal: Vec3,

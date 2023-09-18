@@ -18,6 +18,8 @@ use std::{
 
 use crate::aabb::AABB;
 use crate::bvh::{Bvh, BvhNode};
+use crate::material::Material;
+use crate::mesh::Mesh;
 use crate::ray::Ray;
 use crate::{
     camera::Camera,
@@ -81,11 +83,8 @@ pub struct Renderer {
 
 #[derive(Clone)]
 pub struct MeshQueueEntry {
-    vao: u32,
-    vbo: u32,
-    n_vertices: i32,
-    material: Option<crate::material::Material>,
-    bvh: Option<Arc<Bvh>>,
+    mesh: Arc<Mesh>,
+    material: Arc<Material>,
 }
 
 #[derive(Clone)]
@@ -350,7 +349,9 @@ impl Renderer {
         }
 
         // Render mesh queue
-        for mesh in &self.mesh_queue {
+        for entry in &self.mesh_queue {
+            let mesh = &*entry.mesh;
+            let material = &*entry.material;
             // Render the first mesh in the queue
             unsafe {
                 // Bind the vertex buffer
@@ -361,17 +362,25 @@ impl Renderer {
                 gl::BindBufferBase(gl::UNIFORM_BUFFER, 0, self.const_buffer_gpu);
 
                 // Bind the texture
-                if mesh.material.is_some() {
-                    gl::BindTexture(
-                        gl::TEXTURE_2D,
-                        mesh.material.clone().unwrap().tex_alb as u32,
-                    );
-                } else {
-                    gl::BindTexture(gl::TEXTURE_2D, 0);
-                }
+                gl::BindTexture(
+                    gl::TEXTURE0,
+                    material.tex_alb as u32,
+                );
+                gl::BindTexture(
+                    gl::TEXTURE1,
+                    material.tex_nrm as u32,
+                );
+                gl::BindTexture(
+                    gl::TEXTURE2,
+                    material.tex_mtl_rgh as u32,
+                );
+                gl::BindTexture(
+                    gl::TEXTURE3,
+                    material.tex_emm as u32,
+                );
 
                 // Draw the model
-                gl::DrawArrays(gl::TRIANGLES, 0, mesh.n_vertices);
+                gl::DrawArrays(gl::TRIANGLES, 0, mesh.verts.len() as _);
             }
         }
 
@@ -484,8 +493,8 @@ impl Renderer {
                 let ray = Ray::new(self.camera_position, forward_vec, None);
 
                 // Loop over each mesh in the mesh queue
-                for mesh in &self.mesh_queue {
-                    if let Some(bvh) = mesh.bvh.clone() {
+                for entry in &self.mesh_queue {
+                    if let Some(bvh) = &entry.mesh.bvh {
                         let bvh = bvh.as_ref();
                         if let Some(hit_info) = bvh.intersects(&ray) {
                             self.framebuffer_cpu[(x + y * resolution.0) as usize] = Pixel32 {
@@ -540,13 +549,23 @@ impl Renderer {
         unsafe {
             gl::Enable(gl::DEPTH_TEST);
             gl::Enable(gl::CULL_FACE);
-            gl::UseProgram(self.triangle_shader);
+            gl::UseProgram(self.raytracing_shader);
         }
 
         // Render mesh queue
-        for _mesh in &self.mesh_queue {
+        for entry in &self.mesh_queue {
             // Render the first mesh in the queue
-            // todo
+            let mesh = entry.mesh.as_ref();
+            let bvh = &**mesh.bvh.as_ref().unwrap();
+            unsafe {
+                gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 0, bvh.gpu_nodes);
+                gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 1, bvh.gpu_indices);
+                gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 2, bvh.gpu_triangles);
+                gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 3, bvh.gpu_counts);
+                gl::BindImageTexture(0, self.framebuffer_texture, 0, gl::FALSE, 0, gl::READ_WRITE, gl::RGBA16F);
+                gl::DispatchCompute(self.window_resolution_prev[0] as _, self.window_resolution_prev[1] as _, 1);
+                gl::MemoryBarrier(gl::SHADER_IMAGE_ACCESS_BARRIER_BIT);
+            }
         }
 
         // Render compute shader test
@@ -818,22 +837,11 @@ impl Renderer {
         if !self.models.contains_key(model_id) {
             return;
         }
-        for (name, mesh) in &self.models.get(model_id).unwrap().meshes.clone() {
+        for (name, mesh) in self.models.get(model_id).unwrap().meshes.clone() {
             self.mesh_queue.push(MeshQueueEntry {
-                vao: mesh.vao,
-                vbo: mesh.vbo,
-                n_vertices: mesh.verts.len() as i32,
-                material: self
-                    .models
-                    .get(model_id)
-                    .unwrap()
-                    .materials
-                    .get(name)
-                    .cloned(),
-                bvh: mesh.bvh.clone(),
+                mesh: Arc::new(mesh),
+                material: Arc::new(self.models.get(model_id).unwrap().materials.get(&name).unwrap().clone())
             });
-            let bvh = mesh.bvh.clone().unwrap();
-            self.draw_bvh(bvh, Vec4::new(1.0, 1.0, 1.0, 1.0));
         }
     }
 
