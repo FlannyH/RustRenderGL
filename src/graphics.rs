@@ -69,7 +69,7 @@ pub struct Renderer {
     camera_position: Vec3,
     camera_rotation_euler: Vec3,
     fov: f32, // in radians
-    aspect_ratio: f32, 
+    aspect_ratio: f32,
     viewport_height: f32,
     viewport_width: f32,
     viewport_depth: f32,
@@ -91,7 +91,7 @@ pub struct MeshQueueEntry {
 #[derive(Clone)]
 pub struct LineQueueEntry {
     position: Vec3,
-    color: Vec4
+    color: Vec4,
 }
 
 pub struct GlobalConstBuffer {
@@ -163,8 +163,8 @@ impl Renderer {
 
         // Load shaders
         renderer.fbo_shader = renderer
-        .load_shader(Path::new("assets/shaders/fbo"))
-        .expect("Shader loading failed");
+            .load_shader(Path::new("assets/shaders/fbo"))
+            .expect("Shader loading failed");
         renderer.triangle_shader = renderer
             .load_shader(Path::new("assets/shaders/lit"))
             .expect("Shader loading failed!");
@@ -362,7 +362,10 @@ impl Renderer {
 
                 // Bind the texture
                 if mesh.material.is_some() {
-                    gl::BindTexture(gl::TEXTURE_2D, mesh.material.clone().unwrap().tex_alb as u32);
+                    gl::BindTexture(
+                        gl::TEXTURE_2D,
+                        mesh.material.clone().unwrap().tex_alb as u32,
+                    );
                 } else {
                     gl::BindTexture(gl::TEXTURE_2D, 0);
                 }
@@ -374,7 +377,7 @@ impl Renderer {
 
         // Render line queue
         if !self.line_queue.is_empty() {
-        unsafe {
+            unsafe {
                 // Create GPU buffers
                 let mut vao = 0;
                 let mut vbo = 0;
@@ -421,8 +424,8 @@ impl Renderer {
                 // Unbind buffer
                 gl::BindVertexArray(0);
                 gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+            }
         }
-    }
 
         // Render to window buffer
         unsafe {
@@ -816,21 +819,19 @@ impl Renderer {
             return;
         }
         for (name, mesh) in &self.models.get(model_id).unwrap().meshes.clone() {
-            self.mesh_queue
-                .push(MeshQueueEntry {
-                    vao: mesh.vao,
-                    vbo: mesh.vbo,
-                    n_vertices: mesh.verts.len() as i32,
-                    material: self
-                        .models
-                        .get(model_id)
-                        .unwrap()
-                        .materials
-                        .get(name)
-                        .cloned(),
-                    bvh: mesh.bvh.clone(),
-                }
-            );
+            self.mesh_queue.push(MeshQueueEntry {
+                vao: mesh.vao,
+                vbo: mesh.vbo,
+                n_vertices: mesh.verts.len() as i32,
+                material: self
+                    .models
+                    .get(model_id)
+                    .unwrap()
+                    .materials
+                    .get(name)
+                    .cloned(),
+                bvh: mesh.bvh.clone(),
+            });
             let bvh = mesh.bvh.clone().unwrap();
             self.draw_bvh(bvh, Vec4::new(1.0, 1.0, 1.0, 1.0));
         }
@@ -839,35 +840,79 @@ impl Renderer {
     pub fn draw_bvh(&mut self, bvh: Arc<Bvh>, color: Vec4) {
         self.draw_bvh_sub(bvh.clone(), &bvh.nodes[0], color, 0);
     }
-    
+
     fn draw_bvh_sub(&mut self, bvh: Arc<Bvh>, node: &BvhNode, color: Vec4, rec_depth: i32) {
         self.draw_aabb(&node.bounds, color * rec_depth as f32 * 0.1);
         if node.count == 0 {
-            self.draw_bvh_sub(bvh.clone(), &bvh.clone().nodes[node.left_first as usize], color, rec_depth + 1);
-            self.draw_bvh_sub(bvh.clone(), &bvh.clone().nodes[node.left_first as usize + 1], color, rec_depth + 1);
+            self.draw_bvh_sub(
+                bvh.clone(),
+                &bvh.clone().nodes[node.left_first as usize],
+                color,
+                rec_depth + 1,
+            );
+            self.draw_bvh_sub(
+                bvh.clone(),
+                &bvh.clone().nodes[node.left_first as usize + 1],
+                color,
+                rec_depth + 1,
+            );
         }
     }
 
     pub fn draw_line(&mut self, p1: Vec3, p2: Vec3, color: Vec4) {
         self.line_queue.push(LineQueueEntry {
             position: p1,
-            color
-        });        self.line_queue.push(LineQueueEntry {
+            color,
+        });
+        self.line_queue.push(LineQueueEntry {
             position: p2,
-            color
+            color,
         });
     }
 
-    pub fn draw_aabb(&mut self, aabb: &AABB, color: Vec4) {    // Create 8 vertices
-        let vertex000 = Vec3 { x: aabb.min.x, y: aabb.min.y, z: aabb.min.z };
-        let vertex001 = Vec3 { x: aabb.min.x, y: aabb.min.y, z: aabb.max.z };
-        let vertex010 = Vec3 { x: aabb.min.x, y: aabb.max.y, z: aabb.min.z };
-        let vertex011 = Vec3 { x: aabb.min.x, y: aabb.max.y, z: aabb.max.z };
-        let vertex100 = Vec3 { x: aabb.max.x, y: aabb.min.y, z: aabb.min.z };
-        let vertex101 = Vec3 { x: aabb.max.x, y: aabb.min.y, z: aabb.max.z };
-        let vertex110 = Vec3 { x: aabb.max.x, y: aabb.max.y, z: aabb.min.z };
-        let vertex111 = Vec3 { x: aabb.max.x, y: aabb.max.y, z: aabb.max.z };
-    
+    pub fn draw_aabb(&mut self, aabb: &AABB, color: Vec4) {
+        // Create 8 vertices
+        let vertex000 = Vec3 {
+            x: aabb.min.x,
+            y: aabb.min.y,
+            z: aabb.min.z,
+        };
+        let vertex001 = Vec3 {
+            x: aabb.min.x,
+            y: aabb.min.y,
+            z: aabb.max.z,
+        };
+        let vertex010 = Vec3 {
+            x: aabb.min.x,
+            y: aabb.max.y,
+            z: aabb.min.z,
+        };
+        let vertex011 = Vec3 {
+            x: aabb.min.x,
+            y: aabb.max.y,
+            z: aabb.max.z,
+        };
+        let vertex100 = Vec3 {
+            x: aabb.max.x,
+            y: aabb.min.y,
+            z: aabb.min.z,
+        };
+        let vertex101 = Vec3 {
+            x: aabb.max.x,
+            y: aabb.min.y,
+            z: aabb.max.z,
+        };
+        let vertex110 = Vec3 {
+            x: aabb.max.x,
+            y: aabb.max.y,
+            z: aabb.min.z,
+        };
+        let vertex111 = Vec3 {
+            x: aabb.max.x,
+            y: aabb.max.y,
+            z: aabb.max.z,
+        };
+
         // Draw the lines
         self.draw_line(vertex000, vertex100, color);
         self.draw_line(vertex100, vertex101, color);
@@ -881,7 +926,6 @@ impl Renderer {
         self.draw_line(vertex100, vertex110, color);
         self.draw_line(vertex101, vertex111, color);
         self.draw_line(vertex001, vertex011, color);
-    
     }
 
     pub fn load_shader(&mut self, path: &Path) -> Result<u32, &str> {

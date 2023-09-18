@@ -1,8 +1,12 @@
-use std::ops::{Mul, Add};
+use std::ops::{Add, Mul};
 
-use glam::{Vec3, Vec2, Vec2Swizzles};
+use glam::{Vec2, Vec2Swizzles, Vec3};
 
-use crate::{aabb::AABB, bvh::Bvh, structs::{Triangle, Vertex}};
+use crate::{
+    aabb::AABB,
+    bvh::Bvh,
+    structs::{Triangle, Vertex},
+};
 
 pub struct Ray {
     pub position: Vec3,
@@ -84,7 +88,7 @@ impl Triangle {
                 distance: t,
                 normal: edge1.cross(edge2).normalize(),
                 triangle_index: -1,
-                uv: Vec2{x: u, y: v},
+                uv: Vec2 { x: u, y: v },
             });
         }
 
@@ -104,7 +108,16 @@ impl Bvh {
         if hit_info.distance == f32::INFINITY {
             None
         } else {
-            Some(HitInfoExt{ distance: hit_info.distance, vertex_interpolated: Vertex::from_triangle_with_uv(self.triangles.get(hit_info.triangle_index as usize).unwrap(), hit_info.uv.x, hit_info.uv.y) })
+            Some(HitInfoExt {
+                distance: hit_info.distance,
+                vertex_interpolated: Vertex::from_triangle_with_uv(
+                    self.triangles
+                        .get(hit_info.triangle_index as usize)
+                        .unwrap(),
+                    hit_info.uv.x,
+                    hit_info.uv.y,
+                ),
+            })
         }
     }
 
@@ -123,7 +136,8 @@ impl Bvh {
                     let triangle = &self.triangles[self.indices[i as usize] as usize];
                     if let Some(new_hit_info) = triangle.intersects(ray) {
                         // Is this one closer than the previous one we tested?
-                        if new_hit_info.distance < hit_info.distance && new_hit_info.distance >= 0.0 {
+                        if new_hit_info.distance < hit_info.distance && new_hit_info.distance >= 0.0
+                        {
                             // If so, copy the new hit info data
                             *hit_info = new_hit_info;
                             hit_info.triangle_index = self.indices[i as usize] as i32;

@@ -14,9 +14,9 @@ pub struct Bvh {
     pub nodes: Vec<BvhNode>, // node 0 is always the root node
     pub indices: Vec<u32>,
     pub triangles: Vec<Triangle>,
-    pub gpu_nodes: u32, 
-    pub gpu_indices: u32, 
-    pub gpu_triangles: u32, 
+    pub gpu_nodes: u32,
+    pub gpu_indices: u32,
+    pub gpu_triangles: u32,
     pub gpu_counts: u32,
 }
 
@@ -55,22 +55,42 @@ impl Bvh {
             // Nodes
             gl::GenBuffers(1, &mut new_bvh.gpu_nodes);
             gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, new_bvh.gpu_nodes);
-            gl::BufferStorage(gl::SHADER_STORAGE_BUFFER, (new_bvh.nodes.len() * size_of::<BvhNode>()) as isize, new_bvh.nodes.as_ptr() as _, gl::MAP_READ_BIT);
-            
+            gl::BufferStorage(
+                gl::SHADER_STORAGE_BUFFER,
+                (new_bvh.nodes.len() * size_of::<BvhNode>()) as isize,
+                new_bvh.nodes.as_ptr() as _,
+                gl::MAP_READ_BIT,
+            );
+
             // Indices
             gl::GenBuffers(1, &mut new_bvh.gpu_indices);
             gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, new_bvh.gpu_indices);
-            gl::BufferStorage(gl::SHADER_STORAGE_BUFFER, (new_bvh.indices.len() * size_of::<u32>()) as isize, new_bvh.indices.as_ptr() as _, gl::MAP_READ_BIT);
-            
+            gl::BufferStorage(
+                gl::SHADER_STORAGE_BUFFER,
+                (new_bvh.indices.len() * size_of::<u32>()) as isize,
+                new_bvh.indices.as_ptr() as _,
+                gl::MAP_READ_BIT,
+            );
+
             // Triangles
             gl::GenBuffers(1, &mut new_bvh.gpu_triangles);
             gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, new_bvh.gpu_triangles);
-            gl::BufferStorage(gl::SHADER_STORAGE_BUFFER, (new_bvh.triangles.len() * size_of::<Triangle>()) as isize, new_bvh.triangles.as_ptr() as _, gl::MAP_READ_BIT);
-            
+            gl::BufferStorage(
+                gl::SHADER_STORAGE_BUFFER,
+                (new_bvh.triangles.len() * size_of::<Triangle>()) as isize,
+                new_bvh.triangles.as_ptr() as _,
+                gl::MAP_READ_BIT,
+            );
+
             // Counts
             gl::GenBuffers(1, &mut new_bvh.gpu_counts);
             gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, new_bvh.gpu_counts);
-            gl::BufferStorage(gl::SHADER_STORAGE_BUFFER, (cpu_counts.len() * size_of::<u32>()) as isize, cpu_counts.as_ptr() as _, gl::MAP_READ_BIT);
+            gl::BufferStorage(
+                gl::SHADER_STORAGE_BUFFER,
+                (cpu_counts.len() * size_of::<u32>()) as isize,
+                cpu_counts.as_ptr() as _,
+                gl::MAP_READ_BIT,
+            );
             gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, 0);
         }
 
@@ -86,7 +106,10 @@ impl Bvh {
         let begin = node.left_first;
         let end = begin + node.count;
         for i in begin..end {
-            let triangle = self.triangles.get(*self.indices.get(i as usize).unwrap() as usize).unwrap();
+            let triangle = self
+                .triangles
+                .get(*self.indices.get(i as usize).unwrap() as usize)
+                .unwrap();
             node.bounds.grow(triangle.v0.position);
             node.bounds.grow(triangle.v1.position);
             node.bounds.grow(triangle.v2.position);
@@ -101,7 +124,10 @@ impl Bvh {
         let mut avg = Vec3::ZERO;
         let mut divide = 0;
         for i in begin..end {
-            let triangle = self.triangles.get(*self.indices.get(i as usize).unwrap() as usize).unwrap();
+            let triangle = self
+                .triangles
+                .get(*self.indices.get(i as usize).unwrap() as usize)
+                .unwrap();
             avg += triangle.v0.position / 3.0;
             avg += triangle.v1.position / 3.0;
             avg += triangle.v2.position / 3.0;
@@ -134,7 +160,7 @@ impl Bvh {
             node.count = node_count;
             return;
         }
-        
+
         // Create 2 child nodes
         self.nodes.push(BvhNode {
             bounds: AABB::new(),
@@ -167,10 +193,10 @@ impl Bvh {
 
             // If the current primitive's center's <axis>-component is greated than the pivot's <axis>-component
             if center > pivot {
-                (self.indices[i as usize], self.indices[j as usize]) = (self.indices[j as usize], self.indices[i as usize]);
+                (self.indices[i as usize], self.indices[j as usize]) =
+                    (self.indices[j as usize], self.indices[i as usize]);
                 j -= 1;
-            }
-            else {
+            } else {
                 i += 1;
             }
         }

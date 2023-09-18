@@ -1,4 +1,4 @@
-use std::ops::{Sub, Add, Mul};
+use std::ops::{Add, Mul, Sub};
 
 use glam::{Mat4, Quat, Vec2, Vec3, Vec4};
 
