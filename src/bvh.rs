@@ -58,19 +58,20 @@ impl Bvh {
 
         // Only subdivide if we have more than 2 triangles
         if node.count <= 2 || rec_depth > 30 {
-            println!("node {node_index} is a leaf node");
             return;
         }
 
         // Get the average position of all the primitives
         let mut avg = Vec3::ZERO;
+        let mut divide = 0;
         for i in begin..end {
-            let triangle = self.triangles.get(i as usize).unwrap();
-            avg += triangle.v0.position;
-            avg += triangle.v1.position;
-            avg += triangle.v2.position;
+            let triangle = self.triangles.get(*self.indices.get(i as usize).unwrap() as usize).unwrap();
+            avg += triangle.v0.position / 3.0;
+            avg += triangle.v1.position / 3.0;
+            avg += triangle.v2.position / 3.0;
+            divide += 1;
         }
-        avg /= (node.count * 3) as f32;
+        avg /= divide as f32;
 
         // Determine split axis - choose biggest axis
         let size = node.bounds.max - node.bounds.min;
@@ -85,23 +86,26 @@ impl Bvh {
         };
 
         // Partition the index array, and get the split position
-        let node_left_first = node.left_first;
+        let start_index = node.left_first;
         let node_count = node.count;
         node.count = 0; // this is not a leaf node.
         node.left_first = left as _; // this node has to point to the 2 child nodes
-        let mut split_index = self.partition(split_axis, split_pos, node_left_first, node_count);
+        let split_index = self.partition(split_axis, split_pos, start_index, node_count);
 
+        // Abort if one of the sides is empty
+        if split_index - start_index == 0 || split_index - start_index == node_count {return;}
+        
         // Create 2 child nodes
         self.nodes.push(BvhNode {
             bounds: AABB::new(),
-            left_first: node_left_first,
-            count: split_index - node_left_first,
+            left_first: start_index,
+            count: split_index - start_index,
         });
         let right = self.nodes.len();
         self.nodes.push(BvhNode {
             bounds: AABB::new(),
             left_first: split_index,
-            count: node_left_first + node_count - split_index,
+            count: start_index + node_count - split_index,
         });
 
         // Subdivide further
@@ -112,7 +116,7 @@ impl Bvh {
     fn partition(&mut self, axis: Axis, pivot: f32, start: u32, count: u32) -> u32 {
         let mut i = start;
         let mut j = start + count - 1;
-        while i < j {
+        while i <= j {
             // Get triangle center
             let tri = &self.triangles[self.indices[i as usize] as usize];
             let center = match &axis {
@@ -123,11 +127,12 @@ impl Bvh {
 
             // If the current primitive's center's <axis>-component is greated than the pivot's <axis>-component
             if center > pivot {
-                (self.indices[i as usize], self.indices[j as usize]) =
-                    (self.indices[j as usize], self.indices[j as usize]);
+                (self.indices[i as usize], self.indices[j as usize]) = (self.indices[j as usize], self.indices[i as usize]);
                 j -= 1;
             }
-            i += 1;
+            else {
+                i += 1;
+            }
         }
 
         return i;

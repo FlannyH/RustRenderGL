@@ -833,19 +833,22 @@ impl Renderer {
                         .get(name)
                         .cloned(),
                     bvh: mesh.bvh.clone(),
-                });
+                }
+            );
+            let bvh = mesh.bvh.clone().unwrap();
+            self.draw_bvh(bvh, Vec4::new(1.0, 1.0, 1.0, 1.0));
         }
     }
 
     pub fn draw_bvh(&mut self, bvh: Arc<Bvh>, color: Vec4) {
-        self.draw_bvh_sub(bvh.clone(), &bvh.nodes[0], color);
+        self.draw_bvh_sub(bvh.clone(), &bvh.nodes[0], color, 0);
     }
     
-    fn draw_bvh_sub(&mut self, bvh: Arc<Bvh>, node: &BvhNode, color: Vec4) {
-        self.draw_aabb(&node.bounds, color);
+    fn draw_bvh_sub(&mut self, bvh: Arc<Bvh>, node: &BvhNode, color: Vec4, rec_depth: i32) {
+        self.draw_aabb(&node.bounds, color * rec_depth as f32 * 0.1);
         if node.count == 0 {
-            self.draw_bvh_sub(bvh.clone(), &bvh.clone().nodes[node.left_first as usize], color);
-            self.draw_bvh_sub(bvh.clone(), &bvh.clone().nodes[node.left_first as usize + 1], color);
+            self.draw_bvh_sub(bvh.clone(), &bvh.clone().nodes[node.left_first as usize], color, rec_depth + 1);
+            self.draw_bvh_sub(bvh.clone(), &bvh.clone().nodes[node.left_first as usize + 1], color, rec_depth + 1);
         }
     }
 
