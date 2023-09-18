@@ -1,5 +1,5 @@
 use gl::types::GLenum;
-use glam::{Mat4, Vec3, Vec4};
+use glam::{Mat4, Vec3, Vec4, Quat};
 use glfw::{Context, Glfw, Window, WindowEvent};
 use memoffset::offset_of;
 use std::hash::Hash;
@@ -313,6 +313,8 @@ impl Renderer {
 
         // Update raytrace CPU buffer
         self.camera_position = camera.transform.translation;
+        self.camera_rotation_euler.x = camera.pitch;
+        self.camera_rotation_euler.y = camera.yaw;
     }
 
     pub fn begin_frame(&mut self) {
@@ -474,12 +476,18 @@ impl Renderer {
                 let v = ((y as f32 / resolution.1 as f32) * 2.0) - 1.0;
 
                 // Get the ray direction from the UV coordinates
-                let forward_vec = Vec3 {
+                let rot = Quat::from_euler(
+                    glam::EulerRot::ZYX, 
+                    self.camera_rotation_euler.z,
+                    self.camera_rotation_euler.y,
+                    self.camera_rotation_euler.x,
+                );
+                let forward_vec = rot.mul_vec3(Vec3 {
                     x: self.viewport_width * u,
                     y: self.viewport_height * v,
                     z: self.viewport_depth,
-                }
-                .normalize();
+                }).normalize();
+            
 
                 // Fill the screen with the ray direction
                 self.framebuffer_cpu[(x + y * resolution.0) as usize] = Pixel32 {
