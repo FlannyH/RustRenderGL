@@ -571,6 +571,11 @@ impl Renderer {
                 gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 2, bvh.gpu_triangles);
                 gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 3, bvh.gpu_counts);
                 gl::BindImageTexture(0, self.framebuffer_texture, 0, gl::FALSE, 0, gl::READ_WRITE, gl::RGBA16F);
+                gl::Uniform3fv(0, 1, self.camera_position.as_ref() as _);
+                gl::Uniform3fv(1, 1, self.camera_rotation_euler.as_ref() as _);
+                gl::Uniform1f(2, self.viewport_width as _);
+                gl::Uniform1f(3, self.viewport_height as _);
+                gl::Uniform1f(4, self.viewport_depth as _);
                 gl::DispatchCompute(self.window_resolution_prev[0] as _, self.window_resolution_prev[1] as _, 1);
                 gl::MemoryBarrier(gl::SHADER_IMAGE_ACCESS_BARRIER_BIT);
             }
