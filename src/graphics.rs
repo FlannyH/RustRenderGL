@@ -2,12 +2,10 @@ use gl::types::GLenum;
 use glam::{Mat4, Vec3, Vec4};
 use glfw::{Context, Glfw, Window, WindowEvent};
 use memoffset::offset_of;
-use queues::{queue, IsQueue, Queue};
 use std::hash::Hash;
 use std::sync::Arc;
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
-    f32::consts::PI,
     ffi::c_void,
     fs::File,
     hash::Hasher,
@@ -21,7 +19,6 @@ use std::{
 use crate::aabb::AABB;
 use crate::bvh::{Bvh, BvhNode};
 use crate::ray::Ray;
-use crate::structs::Transform;
 use crate::{
     camera::Camera,
     input::UserInput,
@@ -30,7 +27,6 @@ use crate::{
     texture::Texture,
 };
 
-#[allow(dead_code)]
 #[derive(PartialEq, Eq, Debug)]
 pub enum RenderMode {
     None,
@@ -161,7 +157,7 @@ impl Renderer {
 
         // Set FOV
         renderer.fov = 90.0_f32.to_radians();
-        renderer.aspect_ratio = (width as f32 / height as f32);
+        renderer.aspect_ratio = width as f32 / height as f32;
         renderer.viewport_height = (renderer.fov * 0.5).tan();
         renderer.viewport_width = renderer.viewport_height * renderer.aspect_ratio;
 
@@ -545,7 +541,7 @@ impl Renderer {
         }
 
         // Render mesh queue
-        for mesh in &self.mesh_queue {
+        for _mesh in &self.mesh_queue {
             // Render the first mesh in the queue
             // todo
         }

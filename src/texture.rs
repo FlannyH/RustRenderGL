@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use crate::helpers::*;
 use std::path::Path;
 

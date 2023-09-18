@@ -1,5 +1,6 @@
 #![allow(clippy::identity_op)]
 #![allow(clippy::needless_return)]
+#![allow(dead_code)]
 
 mod aabb;
 mod bvh;
