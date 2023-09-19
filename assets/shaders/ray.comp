@@ -28,6 +28,18 @@ struct Triangle {
     Vertex v2;
 };
 
+struct HitInfo {
+    float distance;
+    vec2 uv;
+};
+
+struct Ray {
+    vec3 position;
+    vec3 direction;
+    vec3 one_over_direction;
+    float length;
+};
+
 layout(std430, binding = 0) buffer buf_nodes {
     BvhNode nodes[];
 };
@@ -40,11 +52,50 @@ layout(std430, binding = 2) buffer buf_triangles {
     Triangle triangles[];
 };
 
+layout(std430, binding = 3) buffer buf_counts {
+    uint n_nodes;
+    uint n_triangles;
+};
+
 layout (location = 0) uniform mat3 camera_rot;
 layout (location = 1) uniform vec3 camera_pos;
 layout (location = 2) uniform float viewport_width;
 layout (location = 3) uniform float viewport_height;
 layout (location = 4) uniform float viewport_depth;
+
+HitInfo ray_intersect_triangle(vec3 direction, Triangle triangle) {
+    HitInfo hit_info;
+    hit_info.distance = -1.0;
+
+    vec3 edge1 = triangle.v1.position - triangle.v0.position;
+    vec3 edge2 = triangle.v2.position - triangle.v0.position;
+    vec3 h = cross(direction, edge2);
+    float det = dot(edge1, h);
+
+    if (det <= 0.0) {
+        return hit_info;
+    }
+
+    float inv_det = 1.0 / det;
+    vec3 v0_ray = camera_pos - triangle.v0.position;
+    float u = inv_det * dot(v0_ray, h);
+    if (u < 0.0 || u > 1.0) {
+        return hit_info;
+    }
+
+    vec3 q = cross(v0_ray, edge1);
+    float v = inv_det * dot(direction, q);
+    if (v < 0.0 || (u + v) > 1.0) {
+        return hit_info;
+    }
+
+    float t = inv_det * dot(edge2, q);
+    if (t > 0.0) {
+        hit_info.distance = t;
+        hit_info.uv = vec2(u, v);
+    }
+    return hit_info;
+}
 
 void main() {
     // Get UV coordinates
@@ -61,7 +112,23 @@ void main() {
 
     // Rotate it
     forward_vec = forward_vec * camera_rot;
-    
+
+    HitInfo final_hit;
+    HitInfo curr_hit;
+    final_hit.distance = 100011111.0;
+    for (int i = 0; i < n_triangles; ++i) {
+        curr_hit = ray_intersect_triangle(forward_vec, triangles[i]);
+        if (curr_hit.distance < final_hit.distance && curr_hit.distance > 0.0) {
+            final_hit = curr_hit;
+        }
+    }
+
 	vec4 pixel = vec4(forward_vec, 1.0);
+    if (final_hit.distance < 100000.0) {
+        pixel.x = final_hit.distance;
+        pixel.y = final_hit.distance;
+        pixel.z = final_hit.distance;
+    }
+    
 	imageStore(img_input, ivec2(pixel_coords.x, pixel_coords.y), pixel);
 }

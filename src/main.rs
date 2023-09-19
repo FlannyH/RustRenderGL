@@ -85,8 +85,5 @@ fn main() {
         if user_input.is_key_down(Key::Num3) {
             renderer.mode = RenderMode::RaytracedGPU;
         }
-
-        println!("player pos {:?}", camera.transform.translation);
-        println!("player rot {}, {}", camera.pitch, camera.yaw);
     }
 }
