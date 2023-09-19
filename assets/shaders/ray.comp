@@ -3,8 +3,12 @@ layout(local_size_x = 1, local_size_y = 1) in;
 layout(rgba16f, binding = 0) uniform image2D img_input;
 
 struct AABB {
-    vec3 min;
-    vec3 max;
+    float min_x;
+    float min_y;
+    float min_z;
+    float max_x;
+    float max_y;
+    float max_z;
 };
 
 struct BvhNode {
@@ -16,6 +20,7 @@ struct BvhNode {
 struct Vertex {
     vec3 position;
     vec3 normal;
+    vec2 _padding;
     vec4 tangent;
     vec4 colour;
     vec2 uv0;
@@ -71,20 +76,20 @@ int node_check_pop_cursor = 0;
 int node_check_stack_size = 0;
 
 bool ray_intersect_aabb(AABB bounds) {
-    float tx1 = (bounds.min.x - camera_pos.x) * one_over_direction.x;
-    float tx2 = (bounds.max.x - camera_pos.x) * one_over_direction.x;
+    float tx1 = (bounds.min_x - camera_pos.x) * one_over_direction.x;
+    float tx2 = (bounds.max_x - camera_pos.x) * one_over_direction.x;
 
     float tmin = min(tx1, tx2);
     float tmax = max(tx1, tx2);
 
-    float ty1 = (bounds.min.y - camera_pos.y) * one_over_direction.y;
-    float ty2 = (bounds.max.y - camera_pos.y) * one_over_direction.y;
+    float ty1 = (bounds.min_y - camera_pos.y) * one_over_direction.y;
+    float ty2 = (bounds.max_y - camera_pos.y) * one_over_direction.y;
 
     tmin = max(tmin, min(ty1, ty2));
     tmax = min(tmax, max(ty1, ty2));
 
-    float tz1 = (bounds.min.z - camera_pos.z) * one_over_direction.z;
-    float tz2 = (bounds.max.z - camera_pos.z) * one_over_direction.z;
+    float tz1 = (bounds.min_z - camera_pos.z) * one_over_direction.z;
+    float tz2 = (bounds.max_z - camera_pos.z) * one_over_direction.z;
 
     tmin = max(tmin, min(tz1, tz2));
     tmax = min(tmax, max(tz1, tz2));
@@ -199,14 +204,7 @@ void main() {
 
     HitInfo final_hit;
     HitInfo curr_hit;
-    final_hit.distance = 100011111.0;
-    if (ray_intersect_aabb(nodes[0].bounds)) {
-        final_hit.distance = 0.1;
-    }
-    if (ray_intersect_aabb(nodes[nodes[0].left_first + 1].bounds)) {
-        final_hit.distance = 0.2;
-    }
-    //final_hit = ray_intersect_bvh();
+    final_hit = ray_intersect_bvh();
 
 	vec4 pixel = vec4(direction, 1.0);
     if (final_hit.distance < 100000.0) {
