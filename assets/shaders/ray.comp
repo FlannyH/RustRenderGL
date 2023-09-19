@@ -19,8 +19,7 @@ struct BvhNode {
 
 struct Vertex {
     vec3 position;
-    vec3 normal;
-    vec2 _padding;
+    vec3 normal;    
     vec4 tangent;
     vec4 colour;
     vec2 uv0;
@@ -142,11 +141,9 @@ HitInfo ray_intersect_bvh_node(int node_index) {
     closest_hit.distance = 1e30;
 
     // If not at leaf node yet 
-    if (nodes[node_index].count != -1) {
+    if (nodes[node_index].count == -1) {
         // If the ray hits this AABB
         if (ray_intersect_aabb(nodes[node_index].bounds)) {
-            closest_hit.distance = 0.1;
-            return closest_hit;
             // Add the child nodes to the stack
             add_node_to_stack(nodes[node_index].left_first);
             add_node_to_stack(nodes[node_index].left_first + 1);
@@ -204,6 +201,7 @@ void main() {
 
     HitInfo final_hit;
     HitInfo curr_hit;
+    final_hit.distance = 1e30;
     final_hit = ray_intersect_bvh();
 
 	vec4 pixel = vec4(direction, 1.0);

@@ -184,7 +184,6 @@ fn create_vertex_array(
             colour: Vec4::new(1., 1., 1., 1.),
             uv0: Vec2::new(0., 0.),
             uv1: Vec2::new(0., 0.),
-            _padding: Vec2::new(0., 0.),
         };
         if !position_vec.is_empty() {
             let pos3 = position_vec[index as usize];

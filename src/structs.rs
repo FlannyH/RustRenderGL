@@ -8,7 +8,6 @@ use glam::{Mat4, Quat, Vec2, Vec3, Vec4};
 pub struct Vertex {
     pub position: Vec3,
     pub normal: Vec3,
-    pub _padding: Vec2,
     pub tangent: Vec4,
     pub colour: Vec4,
     pub uv0: Vec2,
@@ -95,7 +94,6 @@ impl Mul<f32> for Vertex {
             colour: self.colour * rhs,
             uv0: self.uv0 * rhs,
             uv1: self.uv1 * rhs,
-            _padding: Vec2::ZERO,
         }
     }
 }
@@ -110,7 +108,6 @@ impl Add<Vertex> for Vertex {
             colour: self.colour + rhs.colour,
             uv0: self.uv0 + rhs.uv0,
             uv1: self.uv1 + rhs.uv1,
-            _padding: Vec2::ZERO,
         }
     }
 }
@@ -125,7 +122,6 @@ impl Sub<Vertex> for Vertex {
             colour: self.colour - rhs.colour,
             uv0: self.uv0 - rhs.uv0,
             uv1: self.uv1 - rhs.uv1,
-            _padding: Vec2::ZERO,
         }
     }
 }
