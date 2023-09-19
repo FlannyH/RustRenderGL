@@ -63,7 +63,36 @@ layout (location = 2) uniform float viewport_width;
 layout (location = 3) uniform float viewport_height;
 layout (location = 4) uniform float viewport_depth;
 
-HitInfo ray_intersect_triangle(vec3 direction, Triangle triangle) {
+vec3 direction;
+vec3 one_over_direction;
+int node_check_stack[256];
+int node_check_add_cursor = 0;
+int node_check_pop_cursor = 0;
+int node_check_stack_size = 0;
+
+bool ray_intersect_aabb(AABB bounds) {
+    float tx1 = (bounds.min.x - camera_pos.x) * one_over_direction.x;
+    float tx2 = (bounds.max.x - camera_pos.x) * one_over_direction.x;
+
+    float tmin = min(tx1, tx2);
+    float tmax = max(tx1, tx2);
+
+    float ty1 = (bounds.min.y - camera_pos.y) * one_over_direction.y;
+    float ty2 = (bounds.max.y - camera_pos.y) * one_over_direction.y;
+
+    tmin = max(tmin, min(ty1, ty2));
+    tmax = min(tmax, max(ty1, ty2));
+
+    float tz1 = (bounds.min.z - camera_pos.z) * one_over_direction.z;
+    float tz2 = (bounds.max.z - camera_pos.z) * one_over_direction.z;
+
+    tmin = max(tmin, min(tz1, tz2));
+    tmax = min(tmax, max(tz1, tz2));
+
+    return tmax >= tmin && tmax >= 0.0;
+}
+
+HitInfo ray_intersect_triangle(Triangle triangle) {
     HitInfo hit_info;
     hit_info.distance = -1.0;
 
@@ -97,6 +126,60 @@ HitInfo ray_intersect_triangle(vec3 direction, Triangle triangle) {
     return hit_info;
 }
 
+void add_node_to_stack(int node_index) {
+    node_check_stack[node_check_add_cursor] = node_index;
+    node_check_add_cursor = (node_check_add_cursor + 1) % 256;
+    node_check_stack_size += 1;
+}
+
+HitInfo ray_intersect_bvh_node(int node_index) {
+    HitInfo closest_hit;
+    closest_hit.distance = 1e30;
+
+    // If not at leaf node yet 
+    if (nodes[node_index].count != -1) {
+        // If the ray hits this AABB
+        if (ray_intersect_aabb(nodes[node_index].bounds)) {
+            closest_hit.distance = 0.1;
+            return closest_hit;
+            // Add the child nodes to the stack
+            add_node_to_stack(nodes[node_index].left_first);
+            add_node_to_stack(nodes[node_index].left_first + 1);
+        }
+    }
+
+    // Otherwise, intersect all triangles in this node
+    else {
+        HitInfo curr_hit;
+        int begin = nodes[node_index].left_first;
+        int end = begin + nodes[node_index].count;
+
+        for (int i = begin; i < end; ++i) {
+            curr_hit = ray_intersect_triangle(triangles[indices[i]]);
+            if (curr_hit.distance > 0.0 && curr_hit.distance < closest_hit.distance) {
+                closest_hit = curr_hit;
+            }
+        }
+    }
+    return closest_hit;
+}
+
+HitInfo ray_intersect_bvh() {
+    HitInfo final_hit;
+    final_hit.distance = 1e30;
+    add_node_to_stack(0);
+    while (node_check_stack_size > 0) {
+        HitInfo curr_hit = ray_intersect_bvh_node(node_check_stack[node_check_pop_cursor]);
+        node_check_pop_cursor += 1;
+        node_check_stack_size -= 1;
+        if (curr_hit.distance < final_hit.distance) {
+            final_hit = curr_hit;
+        }
+    }
+    return final_hit;
+}
+
+
 void main() {
     // Get UV coordinates
 	ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
@@ -111,19 +194,21 @@ void main() {
     ));
 
     // Rotate it
-    forward_vec = forward_vec * camera_rot;
+    direction = forward_vec * camera_rot;
+    one_over_direction = vec3(1.0, 1.0, 1.0) / direction;
 
     HitInfo final_hit;
     HitInfo curr_hit;
     final_hit.distance = 100011111.0;
-    for (int i = 0; i < n_triangles; ++i) {
-        curr_hit = ray_intersect_triangle(forward_vec, triangles[i]);
-        if (curr_hit.distance < final_hit.distance && curr_hit.distance > 0.0) {
-            final_hit = curr_hit;
-        }
+    if (ray_intersect_aabb(nodes[0].bounds)) {
+        final_hit.distance = 0.1;
     }
+    if (ray_intersect_aabb(nodes[nodes[0].left_first + 1].bounds)) {
+        final_hit.distance = 0.2;
+    }
+    //final_hit = ray_intersect_bvh();
 
-	vec4 pixel = vec4(forward_vec, 1.0);
+	vec4 pixel = vec4(direction, 1.0);
     if (final_hit.distance < 100000.0) {
         pixel.x = final_hit.distance;
         pixel.y = final_hit.distance;
