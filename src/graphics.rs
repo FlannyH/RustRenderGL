@@ -375,10 +375,7 @@ impl Renderer {
             .models
             .get(&self.primitives_model)
             .unwrap();
-        let mesh = model
-            .meshes
-            .get("Sphere")
-            .unwrap();
+        let mesh = &model.meshes[0].1;
 
         for sphere in &self.sphere_queue {
             unsafe {
@@ -860,7 +857,7 @@ impl Renderer {
         let mut model_cpu = model.unwrap();
 
         // Upload each submesh in the model to OpenGL
-        for (name, mesh) in &mut model_cpu.meshes {
+        for (name, mesh, _material) in &mut model_cpu.meshes {
             println!("Parsing mesh \"{name}\"");
 
             // Let's put this on the GPU shall we
@@ -948,14 +945,10 @@ impl Renderer {
                 if error != gl::NO_ERROR {
                     return Err(error);
                 }
-            }
-        }
 
-        // Upload each material
-        for (name, material) in &model_cpu.materials {
-            // Combine name to follow this scheme "test.gltf::materials/mat_name/albedo"
-            let _new_name = format!("{}::materials/{}/albedo", path.display(), name);
-            println!("{:?}", material);
+                // Upload the material - combine name to follow this scheme "test.gltf::materials/mat_name/albedo"
+                let _new_name = format!("{}::materials/{}/albedo", path.display(), name); // TODO
+            }
         }
 
         // Calculate hash
@@ -975,18 +968,10 @@ impl Renderer {
         if !self.models.contains_key(model_id) {
             return;
         }
-        for (name, mesh) in self.models.get(model_id).unwrap().meshes.clone() {
+        for (name, mesh,  material) in self.models.get(model_id).unwrap().meshes.clone() {
             self.mesh_queue.push(MeshQueueEntry {
                 mesh: Arc::new(mesh),
-                material: Arc::new(
-                    self.models
-                        .get(model_id)
-                        .unwrap()
-                        .materials
-                        .get(&name)
-                        .unwrap()
-                        .clone(),
-                ),
+                material: Arc::new(material),
             });
         }
     }

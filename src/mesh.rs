@@ -18,8 +18,7 @@ pub struct Mesh {
 }
 
 pub struct Model {
-    pub meshes: HashMap<String, Mesh>, // Where the String is the material id
-    pub materials: HashMap<String, Material>, // Where the String is the material id
+    pub meshes: Vec<(String, Mesh, Material)>,
 }
 
 // So what this function needs to do: &[u8] -(reinterpret)> &[SrcCompType] -(convert)> &[DstCompType]
@@ -261,7 +260,7 @@ fn traverse_nodes(
         for primitive in primitives {
             let mut mesh_buffer_data =
                 create_vertex_array(&primitive, mesh_data, new_local_transform);
-            let material = String::from(primitive.material().name().unwrap_or("None"));
+            let material = String::from(primitive.material().name().unwrap_or("untitled"));
             #[allow(clippy::map_entry)] // This was really annoying and made the code less readable
             if primitives_processed.contains_key(&material) {
                 let mesh: &mut Mesh = primitives_processed.get_mut(&material).unwrap();
@@ -289,18 +288,21 @@ impl Model {
         }
         let (gltf_document, mesh_data, image_data) = gltf_file.unwrap();
 
+        let mut meshes = HashMap::<String, Mesh>::new();
+        let mut materials = HashMap::<String, Material>::new();
+
         // Loop over each scene
         let scene = gltf_document.default_scene();
         if let Some(scene) = scene {
             // For each scene, get the nodes
             for node in scene.nodes() {
-                traverse_nodes(&node, &mesh_data, Mat4::IDENTITY, &mut model.meshes);
+                traverse_nodes(&node, &mesh_data, Mat4::IDENTITY, &mut meshes);
             }
         }
 
         // Get all the textures from the GLTF
         for material in gltf_document.materials() {
-            let mut new_material = Material::new(); // this is unused for now
+            let mut new_material = Material::new();
 
             // Get PBR parameters
             new_material.scl_rgh = material.pbr_metallic_roughness().roughness_factor();
@@ -323,14 +325,14 @@ impl Model {
                     )) as i32;
             }
 
-            model.materials.insert(
+            materials.insert(
                 String::from(material.name().unwrap_or("untitled")),
                 new_material,
             );
         }
 
         // Build BVH
-        model.meshes.iter_mut().for_each(|(_name, mesh)| {
+        meshes.iter_mut().for_each(|(_name, mesh)| {
             // First, clone all the triangles to a separate vector
             let mut triangles = Vec::new();
             for triangle_vertices in mesh.verts.chunks(3) {
@@ -345,13 +347,17 @@ impl Model {
             mesh.bvh = Some(Arc::new(Bvh::construct(triangles)));
         });
 
+        // Create final vector
+        for name in meshes.keys().into_iter() {
+            model.meshes.push((name.clone(), meshes.get(name).unwrap().clone(), materials.get(name).unwrap().clone()));
+        }
+
         Ok(model)
     }
 
     pub(crate) fn new() -> Model {
         Model {
-            meshes: HashMap::new(),
-            materials: HashMap::new(),
+            meshes: Vec::new(),
         }
     }
 }
