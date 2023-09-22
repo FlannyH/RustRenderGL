@@ -3,7 +3,6 @@ use std::ops::{Add, Mul, Sub};
 use glam::{Mat4, Quat, Vec2, Vec3, Vec4};
 
 #[derive(Debug, Copy, Clone)]
-
 #[repr(C)]
 pub struct Vertex {
     pub position: Vec3,
@@ -41,6 +40,12 @@ pub struct Pixel32 {
     pub g: u8,
     pub b: u8,
     pub a: u8,
+}
+
+impl Vertex {
+    pub fn zero() -> Self {
+        Vertex { position: Vec3::ZERO, normal: Vec3::ZERO, tangent: Vec4::ZERO, colour: Vec4::ZERO, uv0: Vec2::ZERO, uv1: Vec2::ZERO}
+    }
 }
 
 impl FragIn {

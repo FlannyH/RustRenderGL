@@ -1,5 +1,5 @@
 use gl::types::GLenum;
-use glam::{Mat4, Vec3, Vec4, Quat, Mat3};
+use glam::{Mat3, Mat4, Quat, Vec3, Vec4, Vec2};
 use glfw::{Context, Glfw, Window, WindowEvent};
 use memoffset::offset_of;
 use std::hash::Hash;
@@ -20,7 +20,8 @@ use crate::aabb::AABB;
 use crate::bvh::{Bvh, BvhNode};
 use crate::material::Material;
 use crate::mesh::Mesh;
-use crate::ray::Ray;
+use crate::ray::{HitInfoExt, Ray};
+use crate::sphere::Sphere;
 use crate::{
     camera::Camera,
     input::UserInput,
@@ -61,6 +62,10 @@ pub struct Renderer {
     // Main triangle shader
     triangle_shader: u32,
     line_shader: u32,
+
+    // Primitives
+    gpu_spheres: u32,
+    sphere_queue: Vec<Sphere>,
 
     // Raytracing stuff
     raytracing_shader: u32,
@@ -152,6 +157,8 @@ impl Renderer {
             },
             const_buffer_gpu: 0,
             aspect_ratio: 0.0,
+            gpu_spheres: 0,
+            sphere_queue: Vec::new(),
         };
 
         // Set FOV
@@ -285,6 +292,11 @@ impl Renderer {
             gl::BindVertexArray(0);
         }
 
+        // Create buffers for primitives
+        unsafe {
+            gl::GenBuffers(1, &mut renderer.gpu_spheres);
+        }
+
         // Return a new renderer object
         Ok(renderer)
     }
@@ -328,6 +340,7 @@ impl Renderer {
         }
         self.line_queue.clear();
         self.mesh_queue.clear();
+        self.sphere_queue.clear();
     }
 
     pub fn end_frame(&mut self) {
@@ -364,22 +377,10 @@ impl Renderer {
                 gl::BindBufferBase(gl::UNIFORM_BUFFER, 0, self.const_buffer_gpu);
 
                 // Bind the texture
-                gl::BindTexture(
-                    gl::TEXTURE0,
-                    material.tex_alb as u32,
-                );
-                gl::BindTexture(
-                    gl::TEXTURE1,
-                    material.tex_nrm as u32,
-                );
-                gl::BindTexture(
-                    gl::TEXTURE2,
-                    material.tex_mtl_rgh as u32,
-                );
-                gl::BindTexture(
-                    gl::TEXTURE3,
-                    material.tex_emm as u32,
-                );
+                gl::BindTexture(gl::TEXTURE0, material.tex_alb as u32);
+                gl::BindTexture(gl::TEXTURE1, material.tex_nrm as u32);
+                gl::BindTexture(gl::TEXTURE2, material.tex_mtl_rgh as u32);
+                gl::BindTexture(gl::TEXTURE3, material.tex_emm as u32);
 
                 // Draw the model
                 gl::DrawArrays(gl::TRIANGLES, 0, mesh.verts.len() as _);
@@ -465,7 +466,7 @@ impl Renderer {
             gl::UseProgram(self.triangle_shader);
         }
 
-        // For now, we just make a buffer with random data in it
+        // Loop over every pixel
         let mut resolution = self.window.get_framebuffer_size();
         resolution.0 /= 1;
         resolution.1 /= 1;
@@ -477,17 +478,18 @@ impl Renderer {
 
                 // Get the ray direction from the UV coordinates
                 let rot = Quat::from_euler(
-                    glam::EulerRot::ZYX, 
+                    glam::EulerRot::ZYX,
                     self.camera_rotation_euler.z,
                     self.camera_rotation_euler.y,
                     self.camera_rotation_euler.x,
                 );
-                let forward_vec = rot.mul_vec3(Vec3 {
-                    x: self.viewport_width * u,
-                    y: self.viewport_height * v,
-                    z: self.viewport_depth,
-                }).normalize();
-            
+                let forward_vec = rot
+                    .mul_vec3(Vec3 {
+                        x: self.viewport_width * u,
+                        y: self.viewport_height * v,
+                        z: self.viewport_depth,
+                    })
+                    .normalize();
 
                 // Fill the screen with the ray direction
                 self.framebuffer_cpu[(x + y * resolution.0) as usize] = Pixel32 {
@@ -500,20 +502,44 @@ impl Renderer {
                 // Create a ray
                 let ray = Ray::new(self.camera_position, forward_vec, None);
 
+                let mut hit_info = HitInfoExt {
+                    distance: f32::INFINITY,
+                    vertex_interpolated: Vertex {
+                        position: Vec3::ZERO,
+                        normal: Vec3::ZERO,
+                        tangent: Vec4::ZERO,
+                        colour: Vec4::ZERO,
+                        uv0: Vec2::ZERO,
+                        uv1: Vec2::ZERO,
+                    },
+                };
                 // Loop over each mesh in the mesh queue
                 for entry in &self.mesh_queue {
                     if let Some(bvh) = &entry.mesh.bvh {
                         let bvh = bvh.as_ref();
-                        if let Some(hit_info) = bvh.intersects(&ray) {
-                            self.framebuffer_cpu[(x + y * resolution.0) as usize] = Pixel32 {
-                                r: ((hit_info.vertex_interpolated.normal.x + 1.0) * 127.0) as u8,
-                                g: ((hit_info.vertex_interpolated.normal.y + 1.0) * 127.0) as u8,
-                                b: ((hit_info.vertex_interpolated.normal.z + 1.0) * 127.0) as u8,
-                                a: 255,
-                            };
+                        if let Some(curr_hit_info) = bvh.intersects(&ray) {
+                            if (curr_hit_info.distance < hit_info.distance) {
+                                hit_info = curr_hit_info;
+                            }
                         }
                     }
                 }
+
+                // Loop over each sphere in the sphere queue
+                for entry in &self.sphere_queue {
+                    if let Some(curr_hit_info) = entry.intersects(&ray) {
+                        if (curr_hit_info.distance < hit_info.distance && curr_hit_info.distance > 0.0) {
+                            hit_info = curr_hit_info;
+                        }
+                    }
+                }
+                
+                self.framebuffer_cpu[(x + y * resolution.0) as usize] = Pixel32 {
+                    r: ((hit_info.vertex_interpolated.normal.x + 1.0) * 127.0) as u8,
+                    g: ((hit_info.vertex_interpolated.normal.y + 1.0) * 127.0) as u8,
+                    b: ((hit_info.vertex_interpolated.normal.z + 1.0) * 127.0) as u8,
+                    a: 255,
+                };
             }
         }
         unsafe {
@@ -553,6 +579,13 @@ impl Renderer {
     }
 
     fn end_frame_raytrace_gpu(&mut self) {
+        // Upload spheres to GPU
+        unsafe {
+            gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, self.gpu_spheres);
+            gl::BufferData(gl::SHADER_STORAGE_BUFFER, (self.sphere_queue.len() * std::mem::size_of::<Sphere>()) as isize, self.sphere_queue.as_ptr() as _, gl::STATIC_DRAW);
+            gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, 0);
+        }
+
         // Enable depth testing
         unsafe {
             gl::Enable(gl::DEPTH_TEST);
@@ -560,29 +593,73 @@ impl Renderer {
             gl::UseProgram(self.raytracing_shader);
         }
 
+        // Calculate camera rotation matrix
+        let camera_rot_mat = Mat3::from_euler(
+            glam::EulerRot::XYZ,
+            -self.camera_rotation_euler.x,
+            -self.camera_rotation_euler.y,
+            -self.camera_rotation_euler.z,
+        );
+
         // Render mesh queue
         for entry in &self.mesh_queue {
             // Render the first mesh in the queue
             let mesh = entry.mesh.as_ref();
             let bvh = &**mesh.bvh.as_ref().unwrap();
-
-            // Calculate camera rotation matrix
-            let camera_rot_mat = Mat3::from_euler(glam::EulerRot::XYZ, -self.camera_rotation_euler.x, -self.camera_rotation_euler.y, -self.camera_rotation_euler.z);
-
             unsafe {
                 gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 0, bvh.gpu_nodes);
                 gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 1, bvh.gpu_indices);
                 gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 2, bvh.gpu_triangles);
-                gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 3, bvh.gpu_counts);
-                gl::BindImageTexture(0, self.framebuffer_texture, 0, gl::FALSE, 0, gl::READ_WRITE, gl::RGBA16F);
+                gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 3, self.gpu_spheres);
+                gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 4, bvh.gpu_counts);
+                gl::BindImageTexture(
+                    0,
+                    self.framebuffer_texture,
+                    0,
+                    gl::FALSE,
+                    0,
+                    gl::READ_WRITE,
+                    gl::RGBA16F,
+                );
                 gl::UniformMatrix3fv(0, 1, gl::FALSE, camera_rot_mat.as_ref().as_ptr() as _);
                 gl::Uniform3fv(1, 1, self.camera_position.as_ref() as _);
                 gl::Uniform1f(2, self.viewport_width as _);
                 gl::Uniform1f(3, self.viewport_height as _);
                 gl::Uniform1f(4, self.viewport_depth as _);
-                gl::DispatchCompute(self.window_resolution_prev[0] as _, self.window_resolution_prev[1] as _, 1);
+                gl::Uniform1i(5, self.sphere_queue.len() as _);
+                gl::DispatchCompute(
+                    self.window_resolution_prev[0] as _,
+                    self.window_resolution_prev[1] as _,
+                    1,
+                );
                 gl::MemoryBarrier(gl::SHADER_IMAGE_ACCESS_BARRIER_BIT);
             }
+        }
+        if self.mesh_queue.len() == 0 {
+            unsafe {
+                gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 3, self.gpu_spheres);
+                gl::BindImageTexture(
+                    0,
+                    self.framebuffer_texture,
+                    0,
+                    gl::FALSE,
+                    0,
+                    gl::READ_WRITE,
+                    gl::RGBA16F,
+                );
+                gl::UniformMatrix3fv(0, 1, gl::FALSE, camera_rot_mat.as_ref().as_ptr() as _);
+                gl::Uniform3fv(1, 1, self.camera_position.as_ref() as _);
+                gl::Uniform1f(2, self.viewport_width as _);
+                gl::Uniform1f(3, self.viewport_height as _);
+                gl::Uniform1f(4, self.viewport_depth as _);
+                gl::Uniform1i(5, self.sphere_queue.len() as _);
+                gl::DispatchCompute(
+                    self.window_resolution_prev[0] as _,
+                    self.window_resolution_prev[1] as _,
+                    1,
+                );
+                gl::MemoryBarrier(gl::SHADER_IMAGE_ACCESS_BARRIER_BIT);
+            }   
         }
 
         // Render compute shader test
@@ -857,7 +934,15 @@ impl Renderer {
         for (name, mesh) in self.models.get(model_id).unwrap().meshes.clone() {
             self.mesh_queue.push(MeshQueueEntry {
                 mesh: Arc::new(mesh),
-                material: Arc::new(self.models.get(model_id).unwrap().materials.get(&name).unwrap().clone())
+                material: Arc::new(
+                    self.models
+                        .get(model_id)
+                        .unwrap()
+                        .materials
+                        .get(&name)
+                        .unwrap()
+                        .clone(),
+                ),
             });
         }
     }
@@ -871,13 +956,13 @@ impl Renderer {
         if node.count == 0 {
             self.draw_bvh_sub(
                 bvh.clone(),
-                &bvh.clone().nodes[node.left_first as usize],
+                &bvh.nodes[node.left_first as usize],
                 color,
                 rec_depth + 1,
             );
             self.draw_bvh_sub(
                 bvh.clone(),
-                &bvh.clone().nodes[node.left_first as usize + 1],
+                &bvh.nodes[node.left_first as usize + 1],
                 color,
                 rec_depth + 1,
             );
@@ -1017,6 +1102,10 @@ impl Renderer {
             gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
         }
         return texture.gl_id;
+    }
+
+    pub fn draw_sphere(&mut self, sphere: Sphere) {
+        self.sphere_queue.push(sphere)
     }
 }
 fn load_shader_part(shader_type: GLenum, path: &Path, program: u32) {

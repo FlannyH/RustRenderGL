@@ -1,11 +1,9 @@
-use std::ops::{Add, Mul};
-
-use glam::{Vec2, Vec2Swizzles, Vec3};
+use glam::{Vec2, Vec3};
 
 use crate::{
     aabb::AABB,
     bvh::Bvh,
-    structs::{Triangle, Vertex},
+    structs::{Triangle, Vertex}, sphere::Sphere,
 };
 
 pub struct Ray {
@@ -149,6 +147,33 @@ impl Bvh {
             self.intersects_sub(ray, node.left_first + 0, hit_info);
             self.intersects_sub(ray, node.left_first + 1, hit_info);
         }
+    }
+}
+
+impl Sphere {
+    pub fn intersects(&self, ray: &Ray) -> Option<HitInfoExt> {
+        let o2c = ray.position - self.position;
+        let b = o2c.dot(ray.direction);
+        let c = o2c.dot(o2c) - self.radius_squared;
+        let d = b*b - c;
+        if d >= 0.0 {
+            let sqrt_d = d.sqrt();
+            let distance1 = (-b - sqrt_d);
+            let distance2 = (-b + sqrt_d);
+            if distance1 >= 0.0 {
+                let mut hit = Vertex::zero();
+                hit.position = ray.position + ray.direction * distance1;
+                hit.normal = hit.position - self.position;
+                return Some(HitInfoExt { distance: distance1, vertex_interpolated: hit});
+            }
+            else {
+                let mut hit = Vertex::zero();
+                hit.position = ray.position + ray.direction * distance2;
+                hit.normal = hit.position - self.position;
+                return Some(HitInfoExt { distance: distance2, vertex_interpolated: hit});
+            }
+        }
+        return None;
     }
 }
 

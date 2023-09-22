@@ -11,6 +11,7 @@ mod input;
 mod material;
 mod mesh;
 mod ray;
+mod sphere;
 mod structs;
 mod texture;
 use std::path::Path;
@@ -21,6 +22,7 @@ use glfw::Key;
 use graphics::Renderer;
 use input::UserInput;
 
+use sphere::Sphere;
 use structs::Transform;
 
 use crate::graphics::RenderMode;
@@ -56,7 +58,7 @@ fn main() {
         camera.update(&user_input, 0.016); //todo: actual delta time
         renderer.update_camera(&camera);
         renderer.begin_frame();
-        renderer.draw_model(&model_spyro);
+        //renderer.draw_model(&model_spyro);
         // Right line
         renderer.draw_line(
             Vec3::new(0.0, 0.0, 0.0),
@@ -75,6 +77,14 @@ fn main() {
             Vec3::new(0.0, 0.0, 4.0),
             Vec4::new(0.0, 0.0, 1.0, 1.0),
         );
+        renderer.draw_sphere(Sphere::new(
+            Vec3 {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            5.0,
+        ));
         renderer.end_frame();
         if user_input.is_key_down(Key::Num1) {
             renderer.mode = RenderMode::Rasterized;

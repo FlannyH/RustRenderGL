@@ -32,6 +32,11 @@ struct Triangle {
     Vertex v2;
 };
 
+struct Sphere {
+    vec3 position;
+    float radius_squared;
+};
+
 struct HitInfo {
     float distance;
     vec2 uv;
@@ -56,7 +61,11 @@ layout(std430, binding = 2) buffer buf_triangles {
     Triangle triangles[];
 };
 
-layout(std430, binding = 3) buffer buf_counts {
+layout(std430, binding = 3) buffer buf_sphere {
+    Sphere spheres[];
+};
+
+layout(std430, binding = 4) buffer buf_counts {
     uint n_nodes;
     uint n_triangles;
 };
@@ -66,6 +75,7 @@ layout (location = 1) uniform vec3 camera_pos;
 layout (location = 2) uniform float viewport_width;
 layout (location = 3) uniform float viewport_height;
 layout (location = 4) uniform float viewport_depth;
+layout (location = 5) uniform int n_spheres;
 
 vec3 direction;
 vec3 one_over_direction;
@@ -128,6 +138,32 @@ HitInfo ray_intersect_triangle(Triangle triangle) {
         hit_info.uv = vec2(u, v);
     }
     return hit_info;
+}
+
+HitInfo ray_intersect_sphere(Sphere sphere) {
+    HitInfo hit;
+    hit.distance = 1e30;
+	vec3 o2c = camera_pos - sphere.position;
+	const float b = dot(o2c, direction);
+	const float c = dot(o2c, o2c) - sphere.radius_squared;
+	const float d = b * b - c;
+    if (d >= 0)
+    {
+        //Get distance
+        const float sqrt_d = sqrt(d);
+        const float distance1 = (-b - sqrt_d);
+        const float distance2 = (-b + sqrt_d);
+        if (distance1 >= 0)
+        {
+            hit.distance = distance1;
+        }
+        //If the smaller distance is under 0, we're inside the sphere, so use the other distance
+        else
+        {
+            hit.distance = distance2;
+        }
+    }
+    return hit;
 }
 
 void add_node_to_stack(int node_index) {
@@ -202,7 +238,14 @@ void main() {
     HitInfo final_hit;
     HitInfo curr_hit;
     final_hit.distance = 1e30;
-    final_hit = ray_intersect_bvh();
+    //final_hit = ray_intersect_bvh();
+
+    for (int i = 0; i < n_spheres; ++i) {
+        curr_hit = ray_intersect_sphere(spheres[i]);
+        if (curr_hit.distance > 0 && curr_hit.distance < final_hit.distance) { 
+            final_hit = curr_hit;
+        }
+    }
 
 	vec4 pixel = vec4(direction, 1.0);
     if (final_hit.distance < 100000.0) {
