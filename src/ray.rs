@@ -3,7 +3,8 @@ use glam::{Vec2, Vec3};
 use crate::{
     aabb::AABB,
     bvh::Bvh,
-    structs::{Triangle, Vertex}, sphere::Sphere,
+    sphere::Sphere,
+    structs::{Triangle, Vertex},
 };
 
 pub struct Ray {
@@ -155,7 +156,7 @@ impl Sphere {
         let o2c = ray.position - self.position;
         let b = o2c.dot(ray.direction);
         let c = o2c.dot(o2c) - self.radius_squared;
-        let d = b*b - c;
+        let d = b * b - c;
         if d >= 0.0 {
             let sqrt_d = d.sqrt();
             let distance1 = (-b - sqrt_d);
@@ -164,13 +165,18 @@ impl Sphere {
                 let mut hit = Vertex::zero();
                 hit.position = ray.position + ray.direction * distance1;
                 hit.normal = hit.position - self.position;
-                return Some(HitInfoExt { distance: distance1, vertex_interpolated: hit});
-            }
-            else {
+                return Some(HitInfoExt {
+                    distance: distance1,
+                    vertex_interpolated: hit,
+                });
+            } else {
                 let mut hit = Vertex::zero();
                 hit.position = ray.position + ray.direction * distance2;
                 hit.normal = hit.position - self.position;
-                return Some(HitInfoExt { distance: distance2, vertex_interpolated: hit});
+                return Some(HitInfoExt {
+                    distance: distance2,
+                    vertex_interpolated: hit,
+                });
             }
         }
         return None;

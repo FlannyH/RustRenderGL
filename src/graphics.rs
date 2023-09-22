@@ -1,5 +1,5 @@
 use gl::types::GLenum;
-use glam::{Mat3, Mat4, Quat, Vec3, Vec4, Vec2};
+use glam::{Mat3, Mat4, Quat, Vec2, Vec3, Vec4};
 use glfw::{Context, Glfw, Window, WindowEvent};
 use memoffset::offset_of;
 use std::hash::Hash;
@@ -66,6 +66,7 @@ pub struct Renderer {
     // Primitives
     gpu_spheres: u32,
     sphere_queue: Vec<Sphere>,
+    primitives_model: u64, // key into models hashmap
 
     // Raytracing stuff
     raytracing_shader: u32,
@@ -159,6 +160,7 @@ impl Renderer {
             aspect_ratio: 0.0,
             gpu_spheres: 0,
             sphere_queue: Vec::new(),
+            primitives_model: 0,
         };
 
         // Set FOV
@@ -297,6 +299,11 @@ impl Renderer {
             gl::GenBuffers(1, &mut renderer.gpu_spheres);
         }
 
+        // Load sphere model for rasterizer
+        renderer.primitives_model = renderer
+            .load_model(&Path::new("assets/models/primitives.gltf"))
+            .unwrap();
+
         // Return a new renderer object
         Ok(renderer)
     }
@@ -363,6 +370,32 @@ impl Renderer {
             gl::UseProgram(self.triangle_shader);
         }
 
+        // Add spheres to render queue
+        let model = self
+            .models
+            .get(&self.primitives_model)
+            .unwrap();
+        let mesh = model
+            .meshes
+            .get("Sphere")
+            .unwrap();
+
+        for sphere in &self.sphere_queue {
+            unsafe {
+                // Bind the vertex buffer
+                gl::BindVertexArray(mesh.vao);
+                gl::BindBuffer(gl::ARRAY_BUFFER, mesh.vbo);
+
+                // Bind the constant buffer
+                gl::BindBufferBase(gl::UNIFORM_BUFFER, 0, self.const_buffer_gpu);
+
+                // Bind the texture
+
+                // Draw the model
+                gl::DrawArrays(gl::TRIANGLES, 0, mesh.verts.len() as _);
+            }
+        }
+
         // Render mesh queue
         for entry in &self.mesh_queue {
             let mesh = &*entry.mesh;
@@ -381,6 +414,10 @@ impl Renderer {
                 gl::BindTexture(gl::TEXTURE1, material.tex_nrm as u32);
                 gl::BindTexture(gl::TEXTURE2, material.tex_mtl_rgh as u32);
                 gl::BindTexture(gl::TEXTURE3, material.tex_emm as u32);
+                gl::Uniform1i(0, material.tex_alb);
+                gl::Uniform1i(1, material.tex_nrm);
+                gl::Uniform1i(2, material.tex_mtl_rgh);
+                gl::Uniform1i(3, material.tex_emm);
 
                 // Draw the model
                 gl::DrawArrays(gl::TRIANGLES, 0, mesh.verts.len() as _);
@@ -528,12 +565,14 @@ impl Renderer {
                 // Loop over each sphere in the sphere queue
                 for entry in &self.sphere_queue {
                     if let Some(curr_hit_info) = entry.intersects(&ray) {
-                        if (curr_hit_info.distance < hit_info.distance && curr_hit_info.distance > 0.0) {
+                        if (curr_hit_info.distance < hit_info.distance
+                            && curr_hit_info.distance > 0.0)
+                        {
                             hit_info = curr_hit_info;
                         }
                     }
                 }
-                
+
                 self.framebuffer_cpu[(x + y * resolution.0) as usize] = Pixel32 {
                     r: ((hit_info.vertex_interpolated.normal.x + 1.0) * 127.0) as u8,
                     g: ((hit_info.vertex_interpolated.normal.y + 1.0) * 127.0) as u8,
@@ -582,7 +621,12 @@ impl Renderer {
         // Upload spheres to GPU
         unsafe {
             gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, self.gpu_spheres);
-            gl::BufferData(gl::SHADER_STORAGE_BUFFER, (self.sphere_queue.len() * std::mem::size_of::<Sphere>()) as isize, self.sphere_queue.as_ptr() as _, gl::STATIC_DRAW);
+            gl::BufferData(
+                gl::SHADER_STORAGE_BUFFER,
+                (self.sphere_queue.len() * std::mem::size_of::<Sphere>()) as isize,
+                self.sphere_queue.as_ptr() as _,
+                gl::STATIC_DRAW,
+            );
             gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, 0);
         }
 
@@ -659,7 +703,7 @@ impl Renderer {
                     1,
                 );
                 gl::MemoryBarrier(gl::SHADER_IMAGE_ACCESS_BARRIER_BIT);
-            }   
+            }
         }
 
         // Render compute shader test

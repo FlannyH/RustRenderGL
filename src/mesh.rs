@@ -285,7 +285,7 @@ impl Model {
         // Load GLTF from file
         let gltf_file = gltf::import(path);
         if gltf_file.is_err() {
-            return Err("Failed to load GLTF file {path}!".to_string());
+            return Err("Failed to load GLTF file!".to_string());
         }
         let (gltf_document, mesh_data, image_data) = gltf_file.unwrap();
 
