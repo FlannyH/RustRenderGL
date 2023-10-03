@@ -15,7 +15,7 @@ layout (std140, binding = 0) uniform const_buffer
 };
 
 // Model specific data
-uniform mat4 u_model_matrix;
+layout (location = 4) uniform mat4 u_model_matrix;
 
 // Vertex output / Fragment input
 out vec4 o_colour;
@@ -27,7 +27,7 @@ out vec2 o_uv1;
 
 void main()
 {
-	gl_Position = u_view_projection_matrix * /*u_model_matrix * */vec4(i_position, 1);
+	gl_Position = u_view_projection_matrix * u_model_matrix * vec4(i_position, 1);
     o_colour = i_colour;
     o_normal = i_normal;
     o_tangent = i_tangent.xyz;

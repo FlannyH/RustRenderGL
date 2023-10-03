@@ -22,6 +22,7 @@ use crate::material::Material;
 use crate::mesh::Mesh;
 use crate::ray::{HitInfoExt, Ray};
 use crate::sphere::Sphere;
+use crate::structs::Transform;
 use crate::{
     camera::Camera,
     input::UserInput,
@@ -385,7 +386,13 @@ impl Renderer {
                 // Bind the constant buffer
                 gl::BindBufferBase(gl::UNIFORM_BUFFER, 0, self.const_buffer_gpu);
 
-                // Bind the texture
+                // Create model matrix for the sphere
+                let sphere_trans = Transform {
+                    translation: sphere.position,
+                    rotation: Quat::IDENTITY,
+                    scale: Vec3::ONE * sphere.radius_squared.sqrt(),
+                }.local_matrix();
+                gl::UniformMatrix4fv(4, 1, gl::FALSE, sphere_trans.as_ref().as_ptr() as *const _);
 
                 // Draw the model
                 gl::DrawArrays(gl::TRIANGLES, 0, mesh.verts.len() as _);
