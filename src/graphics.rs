@@ -58,6 +58,7 @@ pub struct Renderer {
     // Mesh render queue
     mesh_queue: Vec<MeshQueueEntry>,
     line_queue: Vec<LineQueueEntry>,
+    request_reupload: bool,
 
     // Main triangle shader
     triangle_shader: u32,
@@ -161,6 +162,7 @@ impl Renderer {
             gpu_spheres: 0,
             sphere_queue: Vec::new(),
             primitives_model: 0,
+            request_reupload: false,
         };
 
         // Set FOV
@@ -345,9 +347,6 @@ impl Renderer {
             gl::ClearDepth(1.0);
             gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
         }
-        self.line_queue.clear();
-        self.mesh_queue.clear();
-        self.sphere_queue.clear();
     }
 
     pub fn end_frame(&mut self) {
@@ -616,15 +615,19 @@ impl Renderer {
 
     fn end_frame_raytrace_gpu(&mut self) {
         // Upload spheres to GPU
-        unsafe {
-            gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, self.gpu_spheres);
-            gl::BufferData(
-                gl::SHADER_STORAGE_BUFFER,
-                (self.sphere_queue.len() * std::mem::size_of::<Sphere>()) as isize,
-                self.sphere_queue.as_ptr() as _,
-                gl::STATIC_DRAW,
-            );
-            gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, 0);
+        if self.request_reupload {
+            unsafe {
+                gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, self.gpu_spheres);
+                gl::BufferData(
+                    gl::SHADER_STORAGE_BUFFER,
+                    (self.sphere_queue.len() * std::mem::size_of::<Sphere>()) as isize,
+                    self.sphere_queue.as_ptr() as _,
+                    gl::STATIC_DRAW,
+                );
+                gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, 0);
+            }
+            
+            self.request_reupload = false
         }
 
         // Enable depth testing
@@ -642,40 +645,6 @@ impl Renderer {
             -self.camera_rotation_euler.z,
         );
 
-        // Render mesh queue
-        for entry in &self.mesh_queue {
-            // Render the first mesh in the queue
-            let mesh = entry.mesh.as_ref();
-            let bvh = &**mesh.bvh.as_ref().unwrap();
-            unsafe {
-                gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 0, bvh.gpu_nodes);
-                gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 1, bvh.gpu_indices);
-                gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 2, bvh.gpu_triangles);
-                gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 3, self.gpu_spheres);
-                gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 4, bvh.gpu_counts);
-                gl::BindImageTexture(
-                    0,
-                    self.framebuffer_texture,
-                    0,
-                    gl::FALSE,
-                    0,
-                    gl::READ_WRITE,
-                    gl::RGBA16F,
-                );
-                gl::UniformMatrix3fv(0, 1, gl::FALSE, camera_rot_mat.as_ref().as_ptr() as _);
-                gl::Uniform3fv(1, 1, self.camera_position.as_ref() as _);
-                gl::Uniform1f(2, self.viewport_width as _);
-                gl::Uniform1f(3, self.viewport_height as _);
-                gl::Uniform1f(4, self.viewport_depth as _);
-                gl::Uniform1i(5, self.sphere_queue.len() as _);
-                gl::DispatchCompute(
-                    self.window_resolution_prev[0] as _,
-                    self.window_resolution_prev[1] as _,
-                    1,
-                );
-                gl::MemoryBarrier(gl::SHADER_IMAGE_ACCESS_BARRIER_BIT);
-            }
-        }
         if self.mesh_queue.len() == 0 {
             unsafe {
                 gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 3, self.gpu_spheres);
@@ -701,23 +670,6 @@ impl Renderer {
                 );
                 gl::MemoryBarrier(gl::SHADER_IMAGE_ACCESS_BARRIER_BIT);
             }
-        }
-
-        // Render compute shader test
-        let resolution = self.window.get_framebuffer_size();
-        unsafe {
-            gl::UseProgram(self.raytracing_shader);
-            gl::BindImageTexture(
-                0,
-                self.framebuffer_texture,
-                0,
-                gl::FALSE,
-                0,
-                gl::READ_WRITE,
-                gl::RGBA16F,
-            );
-            gl::DispatchCompute(resolution.0 as _, resolution.1 as _, 1);
-            gl::MemoryBarrier(gl::SHADER_IMAGE_ACCESS_BARRIER_BIT);
         }
 
         // Render to window buffer
@@ -1133,8 +1085,9 @@ impl Renderer {
         return texture.gl_id;
     }
 
-    pub fn draw_sphere(&mut self, sphere: Sphere) {
-        self.sphere_queue.push(sphere)
+    pub fn add_sphere(&mut self, sphere: Sphere) {
+        self.sphere_queue.push(sphere);
+        self.request_reupload = true;
     }
 }
 fn load_shader_part(shader_type: GLenum, path: &Path, program: u32) {
