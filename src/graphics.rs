@@ -18,6 +18,7 @@ use std::{
 
 use crate::aabb::AABB;
 use crate::bvh::{Bvh, BvhNode};
+use crate::light::Light;
 use crate::material::Material;
 use crate::mesh::Mesh;
 use crate::ray::{HitInfoExt, Ray};
@@ -59,7 +60,9 @@ pub struct Renderer {
     // Mesh render queue
     mesh_queue: Vec<MeshQueueEntry>,
     line_queue: Vec<LineQueueEntry>,
+    light_queue: Vec<Light>,
     request_reupload: bool,
+    gpu_lights: u32,
 
     // Main triangle shader
     triangle_shader: u32,
@@ -144,6 +147,7 @@ impl Renderer {
             models: HashMap::new(),
             mesh_queue: vec![],
             line_queue: vec![],
+            light_queue: vec![],
             triangle_shader: 0,
             line_shader: 0,
             raytracing_shader: 0,
@@ -164,6 +168,7 @@ impl Renderer {
             sphere_queue: Vec::new(),
             primitives_model: 0,
             request_reupload: false,
+            gpu_lights: 0,
         };
 
         // Set FOV
@@ -300,6 +305,7 @@ impl Renderer {
         // Create buffers for primitives
         unsafe {
             gl::GenBuffers(1, &mut renderer.gpu_spheres);
+            gl::GenBuffers(1, &mut renderer.gpu_lights);
         }
 
         // Load sphere model for rasterizer
@@ -370,6 +376,20 @@ impl Renderer {
             gl::UseProgram(self.triangle_shader);
         }
 
+        if self.request_reupload {
+           self.request_reupload = false;
+           unsafe {
+                gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, self.gpu_lights);
+                gl::BufferData(
+                    gl::SHADER_STORAGE_BUFFER,
+                    (self.light_queue.len() * std::mem::size_of::<Light>()) as isize,
+                    self.light_queue.as_ptr() as _,
+                    gl::STATIC_DRAW,
+                );
+                gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, 0);
+            }
+        }
+
         // Add spheres to render queue
         let model = self
             .models
@@ -385,6 +405,7 @@ impl Renderer {
 
                 // Bind the constant buffer
                 gl::BindBufferBase(gl::UNIFORM_BUFFER, 0, self.const_buffer_gpu);
+                gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 0, self.gpu_lights);
 
                 // Create model matrix for the sphere
                 let sphere_trans = Transform {
@@ -1093,6 +1114,11 @@ impl Renderer {
 
     pub fn add_sphere(&mut self, sphere: Sphere) {
         self.sphere_queue.push(sphere);
+        self.request_reupload = true;
+    }
+
+    pub fn add_light(&mut self, light: Light) {
+        self.light_queue.push(light);
         self.request_reupload = true;
     }
 }

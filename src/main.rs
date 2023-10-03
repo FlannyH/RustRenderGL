@@ -14,6 +14,7 @@ mod ray;
 mod sphere;
 mod structs;
 mod texture;
+mod light;
 use std::path::Path;
 
 use camera::Camera;
@@ -22,6 +23,7 @@ use glfw::Key;
 use graphics::Renderer;
 use input::UserInput;
 
+use light::Light;
 use sphere::Sphere;
 use structs::Transform;
 
@@ -57,7 +59,11 @@ fn main() {
         },
         5.0,
     ));
-
+    renderer.add_light(Light {
+        position: Vec3::new(1.0, 0.5, 0.5) * 10.0,
+        color: Vec3::new(1.0, 0.5, 0.25),
+        intensity: 64.0,
+    });
     // Main loop
     loop {
         if renderer.should_close() {
