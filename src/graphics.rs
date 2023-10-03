@@ -610,7 +610,6 @@ impl Renderer {
             gl::DrawArrays(gl::TRIANGLES, 0, 6);
             gl::BindTexture(gl::TEXTURE_2D, 0);
         }
-        println!("frame rendered succesfully");
     }
 
     fn end_frame_raytrace_gpu(&mut self) {
