@@ -1,4 +1,4 @@
-#version 420 core
+#version 430 core
 
 // Vertex output / Fragment input
 in vec4 o_colour;
