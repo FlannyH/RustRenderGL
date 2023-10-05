@@ -16,10 +16,14 @@ in vec2 o_uv0;
 in vec2 o_uv1;
 
 const float dither_table[] = {
-    0,  8,  2,  10,
-    12, 4,  14, 6, 
-    3,  11, 1,  9, 
-    15, 7,  13, 5
+    0, 32, 8, 40, 2, 34, 10, 42,
+    48, 16, 56, 24, 50, 18, 58, 26,
+    12, 44, 4, 36, 14, 46, 6, 38,
+    60, 28, 52, 20, 62, 30, 54, 22,
+    3, 35, 11, 43, 1, 33, 9, 41,
+    51, 19, 59, 27, 49, 17, 57, 25,
+    15, 47, 7, 39, 13, 45, 5, 37,
+    63, 31, 55, 23, 61, 29, 53, 21,
 };
 
 layout (binding = 0) uniform sampler2D tex_alb;
@@ -54,11 +58,11 @@ void main() {
     vec4 albedo = (use_tex_alb != 0) ? (texture(tex_alb, o_uv0)) : vec4(1.0, 1.0, 1.0, 1.0);
 
     // Quantize and dither
-    float color_depth = 256.0;
-    int x_mod_4 = int(mod(gl_FragCoord.x, 4.0));
-    int y_mod_4 = int(mod(gl_FragCoord.y, 4.0));
-    int index = x_mod_4 + (y_mod_4 * 4);
-    float dither = dither_table[index] / 16.0;
+    float color_depth = 255.0;
+    int x_mod_8 = int(mod(gl_FragCoord.x, 8.0));
+    int y_mod_8 = int(mod(gl_FragCoord.y, 8.0));
+    int index = x_mod_8 + (y_mod_8 * 8);
+    float dither = dither_table[index] / 64.0;
     dither /= color_depth;
     frag_color = vec4(light_acc, 1.0) * albedo;
     frag_color += vec4(dither);
