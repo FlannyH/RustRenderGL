@@ -228,7 +228,7 @@ void main() {
     // Get UV coordinates
 	ivec2 pixel_coords = ivec2(gl_GlobalInvocationID.xy);
     ivec2 size = imageSize(img_input);
-    vec2 uv = (vec2(pixel_coords) / vec2(size)) * 2.0 - 1.0;
+    vec2 uv = ((vec2(pixel_coords) + vec2(0.5)) / vec2(size)) * 2.0 - 1.0;
 
     // Calculate forward vector
     vec3 forward_vec = normalize(vec3(
