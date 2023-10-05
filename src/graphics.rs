@@ -413,7 +413,7 @@ impl Renderer {
                     rotation: Quat::IDENTITY,
                     scale: Vec3::ONE * sphere.radius_squared.sqrt(),
                 }.local_matrix();
-                gl::UniformMatrix4fv(4, 1, gl::FALSE, sphere_trans.as_ref().as_ptr() as *const _);
+                gl::UniformMatrix4fv(5, 1, gl::FALSE, sphere_trans.as_ref().as_ptr() as *const _);
 
                 // Draw the model
                 gl::DrawArrays(gl::TRIANGLES, 0, mesh.verts.len() as _);
@@ -442,6 +442,7 @@ impl Renderer {
                 gl::Uniform1i(1, material.tex_nrm);
                 gl::Uniform1i(2, material.tex_mtl_rgh);
                 gl::Uniform1i(3, material.tex_emm);
+                gl::Uniform1i(4, self.light_queue.len() as i32);
 
                 // Draw the model
                 gl::DrawArrays(gl::TRIANGLES, 0, mesh.verts.len() as _);

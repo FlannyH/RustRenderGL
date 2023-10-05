@@ -23,9 +23,9 @@ layout (location = 0) uniform int use_tex_alb;
 layout (location = 1) uniform int use_tex_nrm;
 layout (location = 2) uniform int use_tex_mtl_rgh;
 layout (location = 3) uniform int use_tex_emm;
+layout (location = 4) uniform int n_lights;
 layout (std140, binding = 0) buffer light
 {
-	uint n_lights;
     Light lights[];
 };
 

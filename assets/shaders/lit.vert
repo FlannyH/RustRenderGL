@@ -15,7 +15,7 @@ layout (std140, binding = 0) uniform const_buffer
 };
 
 // Model specific data
-layout (location = 4) uniform mat4 u_model_matrix;
+layout (location = 5) uniform mat4 u_model_matrix;
 
 // Vertex output / Fragment input
 out vec3 o_world_pos;
