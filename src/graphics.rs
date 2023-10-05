@@ -776,6 +776,6 @@ extern "system" fn debug_callback(
 ) {
     unsafe {
         let error_msg = std::ffi::CStr::from_ptr(message).to_string_lossy();
-        println!("OpenGL Error: {}", error_msg);
+        //println!("OpenGL Error: {}", error_msg);
     }
 }

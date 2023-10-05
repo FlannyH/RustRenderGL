@@ -1,5 +1,5 @@
 #version 460
-layout(local_size_x = 8, local_size_y = 8) in;
+layout(local_size_x = 4, local_size_y = 8) in;
 layout(rgba16f, binding = 0) uniform image2D img_input;
 
 struct AABB {
@@ -39,7 +39,9 @@ struct Sphere {
 
 struct HitInfo {
     float distance;
-    vec2 uv;
+    vec2 uv; // for triangles
+    vec3 position;
+    vec3 normal; // for spheres
 };
 
 struct Ray {
@@ -156,11 +158,15 @@ HitInfo ray_intersect_sphere(Sphere sphere) {
         if (distance1 >= 0)
         {
             hit.distance = distance1;
+            hit.position = camera_pos + direction * hit.distance;
+            hit.normal = normalize(hit.position - sphere.position);
         }
         //If the smaller distance is under 0, we're inside the sphere, so use the other distance
         else
         {
             hit.distance = distance2;
+            hit.position = camera_pos + direction * hit.distance;
+            hit.normal = normalize(hit.position - sphere.position);
         }
     }
     return hit;
@@ -248,10 +254,8 @@ void main() {
     }
 
 	vec4 pixel = vec4(direction, 1.0);
-    if (final_hit.distance < 100000.0) {
-        pixel.x = final_hit.distance;
-        pixel.y = final_hit.distance;
-        pixel.z = final_hit.distance;
+    if (final_hit.distance < 1e30) {
+        pixel = vec4(final_hit.normal, 1.0);
     }
     
 	imageStore(img_input, ivec2(pixel_coords.x, pixel_coords.y), pixel);
