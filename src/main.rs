@@ -63,6 +63,7 @@ fn main() {
         position: Vec3::new(1.0, 0.5, 0.5) * 10.0,
         color: Vec3::new(1.0, 0.5, 0.25),
         intensity: 64.0,
+        _pad: 0.0,
     });
     // Main loop
     loop {
