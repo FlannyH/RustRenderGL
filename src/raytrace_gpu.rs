@@ -8,7 +8,7 @@ impl Renderer {
         unsafe {
             gl::Enable(gl::DEPTH_TEST);
             gl::Enable(gl::CULL_FACE);
-            gl::UseProgram(self.raytracing_shader);
+            gl::UseProgram(self.raytracing_shader.as_ref().unwrap().program);
         }
 
         // Calculate camera rotation matrix
@@ -57,7 +57,7 @@ impl Renderer {
             );
             gl::Disable(gl::DEPTH_TEST);
             gl::Disable(gl::CULL_FACE);
-            gl::UseProgram(self.fbo_shader);
+            gl::UseProgram(self.fbo_shader.as_ref().unwrap().program);
             gl::BindTexture(gl::TEXTURE_2D, self.framebuffer_texture);
             gl::BindVertexArray(self.quad_vao);
             gl::DrawArrays(gl::TRIANGLES, 0, 6);

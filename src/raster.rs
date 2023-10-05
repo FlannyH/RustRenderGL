@@ -11,7 +11,7 @@ impl Renderer {
         unsafe {
             gl::Enable(gl::DEPTH_TEST);
             gl::Enable(gl::CULL_FACE);
-            gl::UseProgram(self.triangle_shader);
+            gl::UseProgram(self.triangle_shader.as_ref().unwrap().program);
         }
 
         // Add spheres to render queue
@@ -87,7 +87,7 @@ impl Renderer {
                 // Create GPU buffers
                 let mut vao = 0;
                 let mut vbo = 0;
-                gl::UseProgram(self.line_shader);
+                gl::UseProgram(self.line_shader.as_ref().unwrap().program);
                 gl::GenVertexArrays(1, &mut vao);
                 gl::GenBuffers(1, &mut vbo);
 
@@ -144,7 +144,7 @@ impl Renderer {
             );
             gl::Disable(gl::DEPTH_TEST);
             gl::Disable(gl::CULL_FACE);
-            gl::UseProgram(self.fbo_shader);
+            gl::UseProgram(self.fbo_shader.as_ref().unwrap().program);
             gl::BindTexture(gl::TEXTURE_2D, self.framebuffer_texture);
             gl::BindVertexArray(self.quad_vao);
             gl::DrawArrays(gl::TRIANGLES, 0, 6);

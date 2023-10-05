@@ -18,6 +18,7 @@ use crate::bvh::{Bvh, BvhNode};
 use crate::light::Light;
 use crate::material::Material;
 use crate::mesh::Mesh;
+use crate::shader::Shader;
 use crate::sphere::Sphere;
 use crate::{
     camera::Camera,
@@ -45,7 +46,7 @@ pub struct Renderer {
     pub framebuffer_object: u32,
     pub quad_vbo: u32,
     pub quad_vao: u32,
-    pub fbo_shader: u32,
+    pub fbo_shader: Option<Shader>,
     pub window_resolution_prev: [i32; 2],
     pub mode: RenderMode,
 
@@ -60,8 +61,8 @@ pub struct Renderer {
     pub gpu_lights: u32,
 
     // Main triangle shader
-    pub triangle_shader: u32,
-    pub line_shader: u32,
+    pub triangle_shader: Option<Shader>,
+    pub line_shader: Option<Shader>,
 
     // Primitives
     pub gpu_spheres: u32,
@@ -69,7 +70,7 @@ pub struct Renderer {
     pub primitives_model: u64, // key into models hashmap
 
     // Raytracing stuff
-    pub raytracing_shader: u32,
+    pub raytracing_shader: Option<Shader>,
     pub framebuffer_cpu: Vec<Pixel32>,
     pub framebuffer_cpu_to_gpu: u32,
 
@@ -142,16 +143,16 @@ impl Renderer {
             framebuffer_object: 0,
             quad_vbo: 0,
             quad_vao: 0,
-            fbo_shader: 0,
+            fbo_shader: None,
             window_resolution_prev: [0, 0],
             mode: RenderMode::RaytracedCPU,
             models: HashMap::new(),
             mesh_queue: vec![],
             line_queue: vec![],
             light_queue: vec![],
-            triangle_shader: 0,
-            line_shader: 0,
-            raytracing_shader: 0,
+            triangle_shader: None,
+            line_shader: None,
+            raytracing_shader: None,
             framebuffer_cpu: Vec::new(),
             framebuffer_cpu_to_gpu: 0,
             camera_position: Vec3::ZERO,
@@ -179,18 +180,18 @@ impl Renderer {
         renderer.viewport_width = renderer.viewport_height * renderer.aspect_ratio;
 
         // Load shaders
-        renderer.fbo_shader = renderer
+        renderer.fbo_shader = Some(renderer
             .load_shader(Path::new("assets/shaders/fbo"))
-            .expect("Shader loading failed");
-        renderer.triangle_shader = renderer
+            .expect("Shader loading failed"));
+        renderer.triangle_shader = Some(renderer
             .load_shader(Path::new("assets/shaders/lit"))
-            .expect("Shader loading failed!");
-        renderer.line_shader = renderer
+            .expect("Shader loading failed!"));
+        renderer.line_shader = Some(renderer
             .load_shader(Path::new("assets/shaders/line"))
-            .expect("Shader loading failed!");
-        renderer.raytracing_shader = renderer
+            .expect("Shader loading failed!"));
+        renderer.raytracing_shader = Some(renderer
             .load_shader_compute(Path::new("assets/shaders/ray.comp"))
-            .expect("Shader loading failed!");
+            .expect("Shader loading failed!"));
 
         // Create const buffer
         unsafe {

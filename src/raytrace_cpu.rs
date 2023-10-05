@@ -8,7 +8,7 @@ impl Renderer {
         unsafe {
             gl::Enable(gl::DEPTH_TEST);
             gl::Enable(gl::CULL_FACE);
-            gl::UseProgram(self.triangle_shader);
+            gl::UseProgram(self.triangle_shader.as_ref().unwrap().program);
         }
 
         // Loop over every pixel
@@ -116,7 +116,7 @@ impl Renderer {
             );
             gl::Disable(gl::DEPTH_TEST);
             gl::Disable(gl::CULL_FACE);
-            gl::UseProgram(self.fbo_shader);
+            gl::UseProgram(self.fbo_shader.as_ref().unwrap().program);
             gl::BindTexture(gl::TEXTURE_2D, self.framebuffer_cpu_to_gpu);
             gl::BindVertexArray(self.quad_vao);
             gl::DrawArrays(gl::TRIANGLES, 0, 6);
