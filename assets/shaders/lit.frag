@@ -40,6 +40,8 @@ out vec4 frag_color;
 
 void main() {
     vec3 light_acc = vec3(0.0, 0.0, 0.0);
+
+    // Sample point lights
     for (uint i = 0; i < n_lights; ++i) {
         vec3 surface_to_light = lights[i].position.xyz - o_world_pos;
         float distance = length(surface_to_light);
@@ -48,8 +50,10 @@ void main() {
         light_acc += n_dot_l * lights[i].color * lights[i].intensity * attenuation;
     }
     
+    // Get albedo color from texture, or make it white if it doesn't have a texture
     vec4 albedo = (use_tex_alb != 0) ? (texture(tex_alb, o_uv0)) : vec4(1.0, 1.0, 1.0, 1.0);
 
+    // Quantize and dither
     float color_depth = 256.0;
     int x_mod_4 = int(mod(gl_FragCoord.x, 4.0));
     int y_mod_4 = int(mod(gl_FragCoord.y, 4.0));

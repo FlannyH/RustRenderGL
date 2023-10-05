@@ -1,50 +1,67 @@
-use std::{path::Path, fs::File, io::Read, collections::HashMap};
+use std::{path::Path, fs::File, io::Read, time::SystemTime};
 
 use gl::types::GLenum;
 
 use crate::graphics::Renderer;
 
-pub struct Shader {
-    pub files: HashMap<String, File>,
-    pub program: u32,
+pub enum ProgramType {
+    Graphics,
+    Compute,
 }
 
-impl Renderer {
-    pub fn load_shader(&mut self, path: &Path) -> Result<Shader, &str> {
+pub struct ShaderProgram {
+    pub shaders: Vec::<ShaderStage>,
+    pub path: String,
+    pub gl_id: u32,
+    pub program_type: ProgramType,
+}
+
+pub struct ShaderStage {
+    file: File,
+    last_modified: u64,
+    shader_type: GLenum,
+}
+
+impl ShaderProgram {
+    pub fn load_shader(path: &Path) -> Result<ShaderProgram, &str> {
         // Create shader program object
-        let mut shader = Shader {
-            files: HashMap::new(),
-            program: 0,
+        let mut program = ShaderProgram {
+            shaders: Vec::new(),
+            gl_id: 0,
+            path: String::from(path.to_str().unwrap()),
+            program_type: ProgramType::Graphics,
         };
         unsafe {
-            shader.program = gl::CreateProgram();
+            program.gl_id = gl::CreateProgram();
         }
 
         // Load and compile shader parts
         load_shader_part_from_path(
             gl::VERTEX_SHADER,
             path.with_extension("vert").as_path(),
-            &mut shader,
+            &mut program,
         );
         load_shader_part_from_path(
             gl::FRAGMENT_SHADER,
             path.with_extension("frag").as_path(),
-            &mut shader,
+            &mut program,
         );
         unsafe {
-            gl::LinkProgram(shader.program);
+            gl::LinkProgram(program.gl_id);
         }
 
-        Ok(shader)
+        Ok(program)
     }
-
-    pub fn load_shader_compute(&mut self, path: &Path) -> Result<Shader, &str> {
-        let mut shader = Shader {
-            files: HashMap::new(),
-            program: 0,
+    
+    pub fn load_shader_compute(path: &Path) -> Result<ShaderProgram, &str> {
+        let mut shader = ShaderProgram {
+            shaders: Vec::new(),
+            gl_id: 0,
+            path: String::from(path.to_str().unwrap()),
+            program_type: ProgramType::Compute,
         };
         unsafe {
-            shader.program = gl::CreateProgram();
+            shader.gl_id = gl::CreateProgram();
         }
 
         // Load and compile shader parts
@@ -54,20 +71,56 @@ impl Renderer {
             &mut shader,
         );
         unsafe {
-            gl::LinkProgram(shader.program);
+            gl::LinkProgram(shader.gl_id);
         }
 
         Ok(shader)
     }
+
+    pub fn hot_reload_on_change(&mut self) {
+        let mut should_change = false;
+
+        // Check if the file has been modified since the last time it was loaded
+        for shader in &mut self.shaders {
+            let curr_modified = shader.file.metadata().unwrap().modified().unwrap().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+            if curr_modified != shader.last_modified {
+                should_change = true;
+                shader.last_modified = curr_modified;
+                break;
+            }
+        }
+
+        // If so, create a new shader program, and schedule the old one for deletion
+        if should_change {
+            let new_shader = match self.program_type {
+                ProgramType::Graphics => Self::load_shader(Path::new(&self.path)),
+                ProgramType::Compute => Self::load_shader_compute(Path::new(&self.path)),
+            }.unwrap();
+
+            self.shaders.clear();
+            unsafe {gl::DeleteProgram(self.gl_id)} // todo: check if this is safe
+            self.gl_id = new_shader.gl_id;
+            self.shaders = new_shader.shaders;
+        }
+    }
 }
 
-fn load_shader_part_from_path(shader_type: GLenum, path: &Path, shader: &mut Shader) {
+impl Renderer {
+}
+
+fn load_shader_part_from_path(shader_type: GLenum, path: &Path, program: &mut ShaderProgram) {
+    println!("Opening file {path:?}");
     let mut source = File::open(path).expect("Failed to open shader file");
-    load_shader_part_from_file(shader_type, &mut source, shader);
-    shader.files.insert(String::from(path.to_str().unwrap()), source);
+    let last_modified = source.metadata().unwrap().modified().unwrap().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+    load_shader_part_from_file(shader_type, &mut source, program);
+    program.shaders.push(ShaderStage { 
+        file: source, 
+        last_modified,
+        shader_type, 
+    });
 }
 
-fn load_shader_part_from_file(shader_type: GLenum, file: &mut File, shader: &mut Shader) {
+fn load_shader_part_from_file(shader_type: GLenum, file: &mut File, shader: &mut ShaderProgram) {
     // Load shader source
     let mut source = String::new();
     file.read_to_string(&mut source)
@@ -102,6 +155,6 @@ fn load_shader_part_from_file(shader_type: GLenum, file: &mut File, shader: &mut
         }
 
         // Attach to program
-        gl::AttachShader(shader.program, shader_part);
+        gl::AttachShader(shader.gl_id, shader_part);
     }
 }

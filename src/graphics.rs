@@ -18,7 +18,7 @@ use crate::bvh::{Bvh, BvhNode};
 use crate::light::Light;
 use crate::material::Material;
 use crate::mesh::Mesh;
-use crate::shader::Shader;
+use crate::shader::ShaderProgram;
 use crate::sphere::Sphere;
 use crate::{
     camera::Camera,
@@ -46,7 +46,7 @@ pub struct Renderer {
     pub framebuffer_object: u32,
     pub quad_vbo: u32,
     pub quad_vao: u32,
-    pub fbo_shader: Option<Shader>,
+    pub fbo_shader: Option<ShaderProgram>,
     pub window_resolution_prev: [i32; 2],
     pub mode: RenderMode,
 
@@ -61,8 +61,8 @@ pub struct Renderer {
     pub gpu_lights: u32,
 
     // Main triangle shader
-    pub triangle_shader: Option<Shader>,
-    pub line_shader: Option<Shader>,
+    pub triangle_shader: Option<ShaderProgram>,
+    pub line_shader: Option<ShaderProgram>,
 
     // Primitives
     pub gpu_spheres: u32,
@@ -70,7 +70,7 @@ pub struct Renderer {
     pub primitives_model: u64, // key into models hashmap
 
     // Raytracing stuff
-    pub raytracing_shader: Option<Shader>,
+    pub raytracing_shader: Option<ShaderProgram>,
     pub framebuffer_cpu: Vec<Pixel32>,
     pub framebuffer_cpu_to_gpu: u32,
 
@@ -180,17 +180,13 @@ impl Renderer {
         renderer.viewport_width = renderer.viewport_height * renderer.aspect_ratio;
 
         // Load shaders
-        renderer.fbo_shader = Some(renderer
-            .load_shader(Path::new("assets/shaders/fbo"))
+        renderer.fbo_shader = Some(ShaderProgram::load_shader(Path::new("assets/shaders/fbo"))
             .expect("Shader loading failed"));
-        renderer.triangle_shader = Some(renderer
-            .load_shader(Path::new("assets/shaders/lit"))
+        renderer.triangle_shader = Some(ShaderProgram::load_shader(Path::new("assets/shaders/lit"))
             .expect("Shader loading failed!"));
-        renderer.line_shader = Some(renderer
-            .load_shader(Path::new("assets/shaders/line"))
+        renderer.line_shader = Some(ShaderProgram::load_shader(Path::new("assets/shaders/line"))
             .expect("Shader loading failed!"));
-        renderer.raytracing_shader = Some(renderer
-            .load_shader_compute(Path::new("assets/shaders/ray.comp"))
+        renderer.raytracing_shader = Some(ShaderProgram::load_shader_compute(Path::new("assets/shaders/ray.comp"))
             .expect("Shader loading failed!"));
 
         // Create const buffer
@@ -360,6 +356,10 @@ impl Renderer {
 
     pub fn end_frame(&mut self) {
         self.upload_when_requested();
+        self.fbo_shader.as_mut().unwrap().hot_reload_on_change();
+        self.line_shader.as_mut().unwrap().hot_reload_on_change();
+        self.triangle_shader.as_mut().unwrap().hot_reload_on_change();
+        self.raytracing_shader.as_mut().unwrap().hot_reload_on_change();
 
         match self.mode {
             RenderMode::None => {}
