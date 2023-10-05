@@ -159,8 +159,8 @@ impl Sphere {
         let d = b * b - c;
         if d >= 0.0 {
             let sqrt_d = d.sqrt();
-            let distance1 = (-b - sqrt_d);
-            let distance2 = (-b + sqrt_d);
+            let distance1 = -b - sqrt_d;
+            let distance2 = -b + sqrt_d;
             if distance1 >= 0.0 {
                 let mut hit = Vertex::zero();
                 hit.position = ray.position + ray.direction * distance1;

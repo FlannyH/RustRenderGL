@@ -15,14 +15,18 @@ mod sphere;
 mod structs;
 mod texture;
 mod light;
+mod shader;
+mod raster;
+mod raytrace_cpu;
+mod raytrace_gpu;
+
 use std::path::Path;
 
 use camera::Camera;
-use glam::{Vec3, Vec4};
+use glam::Vec3;
 use glfw::Key;
 use graphics::Renderer;
 use input::UserInput;
-
 use light::Light;
 use sphere::Sphere;
 use structs::Transform;
@@ -36,7 +40,7 @@ fn main() {
     let mut user_input = UserInput::new();
 
     // Upload the mesh to the GPU
-    let model_spyro = renderer
+    let _model_spyro = renderer
         .load_model(Path::new("assets/models/spyro.gltf"))
         .expect("Failed to upload model!");
 

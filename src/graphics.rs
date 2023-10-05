@@ -1,5 +1,4 @@
-use gl::types::GLenum;
-use glam::{Mat3, Mat4, Quat, Vec2, Vec3, Vec4};
+use glam::{Mat4, Vec3, Vec4};
 use glfw::{Context, Glfw, Window, WindowEvent};
 use memoffset::offset_of;
 use std::hash::Hash;
@@ -7,9 +6,7 @@ use std::sync::Arc;
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     ffi::c_void,
-    fs::File,
     hash::Hasher,
-    io::Read,
     mem::size_of,
     path::Path,
     ptr::null,
@@ -21,9 +18,7 @@ use crate::bvh::{Bvh, BvhNode};
 use crate::light::Light;
 use crate::material::Material;
 use crate::mesh::Mesh;
-use crate::ray::{HitInfoExt, Ray};
 use crate::sphere::Sphere;
-use crate::structs::Transform;
 use crate::{
     camera::Camera,
     input::UserInput,
@@ -42,70 +37,70 @@ pub enum RenderMode {
 
 pub struct Renderer {
     // Window stuff
-    glfw: Glfw,
-    window: Window,
-    events: Receiver<(f64, WindowEvent)>,
-    depth_buffer_texture: u32,
-    framebuffer_texture: u32,
-    framebuffer_object: u32,
-    quad_vbo: u32,
-    quad_vao: u32,
-    fbo_shader: u32,
-    window_resolution_prev: [i32; 2],
+    pub glfw: Glfw,
+    pub window: Window,
+    pub events: Receiver<(f64, WindowEvent)>,
+    pub depth_buffer_texture: u32,
+    pub framebuffer_texture: u32,
+    pub framebuffer_object: u32,
+    pub quad_vbo: u32,
+    pub quad_vao: u32,
+    pub fbo_shader: u32,
+    pub window_resolution_prev: [i32; 2],
     pub mode: RenderMode,
 
     // Resources
     pub models: HashMap<u64, Model>,
 
     // Mesh render queue
-    mesh_queue: Vec<MeshQueueEntry>,
-    line_queue: Vec<LineQueueEntry>,
-    light_queue: Vec<Light>,
-    request_reupload: bool,
-    gpu_lights: u32,
+    pub mesh_queue: Vec<MeshQueueEntry>,
+    pub line_queue: Vec<LineQueueEntry>,
+    pub light_queue: Vec<Light>,
+    pub request_reupload: bool,
+    pub gpu_lights: u32,
 
     // Main triangle shader
-    triangle_shader: u32,
-    line_shader: u32,
+    pub triangle_shader: u32,
+    pub line_shader: u32,
 
     // Primitives
-    gpu_spheres: u32,
-    sphere_queue: Vec<Sphere>,
-    primitives_model: u64, // key into models hashmap
+    pub gpu_spheres: u32,
+    pub sphere_queue: Vec<Sphere>,
+    pub primitives_model: u64, // key into models hashmap
 
     // Raytracing stuff
-    raytracing_shader: u32,
-    framebuffer_cpu: Vec<Pixel32>,
-    framebuffer_cpu_to_gpu: u32,
+    pub raytracing_shader: u32,
+    pub framebuffer_cpu: Vec<Pixel32>,
+    pub framebuffer_cpu_to_gpu: u32,
 
     // Camera
-    camera_position: Vec3,
-    camera_rotation_euler: Vec3,
-    fov: f32, // in radians
-    aspect_ratio: f32,
-    viewport_height: f32,
-    viewport_width: f32,
-    viewport_depth: f32,
+    pub camera_position: Vec3,
+    pub camera_rotation_euler: Vec3,
+    pub fov: f32, // in radians
+    pub aspect_ratio: f32,
+    pub viewport_height: f32,
+    pub viewport_width: f32,
+    pub viewport_depth: f32,
 
     // Constant buffers
-    const_buffer_cpu: GlobalConstBuffer,
-    const_buffer_gpu: u32,
+    pub const_buffer_cpu: GlobalConstBuffer,
+    pub const_buffer_gpu: u32,
 }
 
 #[derive(Clone)]
 pub struct MeshQueueEntry {
-    mesh: Arc<Mesh>,
-    material: Arc<Material>,
+    pub mesh: Arc<Mesh>,
+    pub material: Arc<Material>,
 }
 
 #[derive(Clone)]
 pub struct LineQueueEntry {
-    position: Vec3,
-    color: Vec4,
+    pub position: Vec3,
+    pub color: Vec4,
 }
 
 pub struct GlobalConstBuffer {
-    view_projection_matrix: Mat4,
+    pub view_projection_matrix: Mat4,
 }
 
 impl Renderer {
@@ -376,152 +371,6 @@ impl Renderer {
         self.window.swap_buffers();
     }
 
-    pub fn end_frame_raster(&mut self) {
-        // Enable depth testing
-        unsafe {
-            gl::Enable(gl::DEPTH_TEST);
-            gl::Enable(gl::CULL_FACE);
-            gl::UseProgram(self.triangle_shader);
-        }
-
-        // Add spheres to render queue
-        let model = self
-            .models
-            .get(&self.primitives_model)
-            .unwrap();
-        let mesh = &model.meshes[0].1;
-
-        for sphere in &self.sphere_queue {
-            unsafe {
-                // Bind the vertex buffer
-                gl::BindVertexArray(mesh.vao);
-                gl::BindBuffer(gl::ARRAY_BUFFER, mesh.vbo);
-
-                // Bind the constant buffer
-                gl::BindBufferBase(gl::UNIFORM_BUFFER, 6, self.const_buffer_gpu);
-                gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 0, self.gpu_lights);
-                
-                // Bind the texture
-                gl::Uniform1i(0, 0);
-                gl::Uniform1i(1, 0);
-                gl::Uniform1i(2, 0);
-                gl::Uniform1i(3, 0);
-                gl::Uniform1i(4, self.light_queue.len() as i32);
-
-                // Create model matrix for the sphere
-                let sphere_trans = Transform {
-                    translation: sphere.position,
-                    rotation: Quat::IDENTITY,
-                    scale: Vec3::ONE * sphere.radius_squared.sqrt(),
-                }.local_matrix();
-                gl::UniformMatrix4fv(5, 1, gl::FALSE, sphere_trans.as_ref().as_ptr() as *const _);
-
-                // Draw the model
-                gl::DrawArrays(gl::TRIANGLES, 0, mesh.verts.len() as _);
-            }
-        }
-
-        // Render mesh queue
-        for entry in &self.mesh_queue {
-            let mesh = &*entry.mesh;
-            let material = &*entry.material;
-            // Render the first mesh in the queue
-            unsafe {
-                // Bind the vertex buffer
-                gl::BindVertexArray(mesh.vao);
-                gl::BindBuffer(gl::ARRAY_BUFFER, mesh.vbo);
-
-                // Bind the constant buffer
-                gl::BindBufferBase(gl::UNIFORM_BUFFER, 0, self.const_buffer_gpu);
-                gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 0, self.gpu_lights);
-
-                // Bind the texture
-                gl::BindTexture(gl::TEXTURE0, material.tex_alb as u32);
-                gl::BindTexture(gl::TEXTURE1, material.tex_nrm as u32);
-                gl::BindTexture(gl::TEXTURE2, material.tex_mtl_rgh as u32);
-                gl::BindTexture(gl::TEXTURE3, material.tex_emm as u32);
-                gl::Uniform1i(0, material.tex_alb);
-                gl::Uniform1i(1, material.tex_nrm);
-                gl::Uniform1i(2, material.tex_mtl_rgh);
-                gl::Uniform1i(3, material.tex_emm);
-                gl::Uniform1i(4, self.light_queue.len() as i32);
-
-                // Draw the model
-                gl::DrawArrays(gl::TRIANGLES, 0, mesh.verts.len() as _);
-            }
-        }
-
-        // Render line queue
-        if !self.line_queue.is_empty() {
-            unsafe {
-                // Create GPU buffers
-                let mut vao = 0;
-                let mut vbo = 0;
-                gl::UseProgram(self.line_shader);
-                gl::GenVertexArrays(1, &mut vao);
-                gl::GenBuffers(1, &mut vbo);
-
-                // Bind GPU buffers
-                gl::BindVertexArray(vao);
-                gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
-
-                // Define vertex layout
-                gl::VertexAttribPointer(
-                    0,
-                    3,
-                    gl::FLOAT,
-                    gl::FALSE,
-                    size_of::<LineQueueEntry>() as i32,
-                    offset_of!(LineQueueEntry, position) as *const _,
-                );
-                gl::VertexAttribPointer(
-                    1,
-                    4,
-                    gl::FLOAT,
-                    gl::TRUE,
-                    size_of::<LineQueueEntry>() as i32,
-                    offset_of!(LineQueueEntry, color) as *const _,
-                );
-
-                // Enable each attribute
-                gl::EnableVertexAttribArray(0);
-                gl::EnableVertexAttribArray(1);
-
-                // Populate vertex buffer
-                gl::BufferData(
-                    gl::ARRAY_BUFFER,
-                    (size_of::<LineQueueEntry>() * self.line_queue.len()) as isize,
-                    &self.line_queue[0] as *const LineQueueEntry as *const c_void,
-                    gl::STATIC_DRAW,
-                );
-
-                gl::DrawArrays(gl::LINES, 0, self.line_queue.len() as _);
-
-                // Unbind buffer
-                gl::BindVertexArray(0);
-                gl::BindBuffer(gl::ARRAY_BUFFER, 0);
-            }
-        }
-
-        // Render to window buffer
-        unsafe {
-            gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
-            gl::Viewport(
-                0,
-                0,
-                self.window_resolution_prev[0],
-                self.window_resolution_prev[1],
-            );
-            gl::Disable(gl::DEPTH_TEST);
-            gl::Disable(gl::CULL_FACE);
-            gl::UseProgram(self.fbo_shader);
-            gl::BindTexture(gl::TEXTURE_2D, self.framebuffer_texture);
-            gl::BindVertexArray(self.quad_vao);
-            gl::DrawArrays(gl::TRIANGLES, 0, 6);
-            gl::BindTexture(gl::TEXTURE_2D, 0);
-        }
-    }
-
     fn upload_when_requested(&mut self) {
         if self.request_reupload {
            self.request_reupload = false;
@@ -552,188 +401,7 @@ impl Renderer {
         }
     }
 
-    fn end_frame_raytrace_cpu(&mut self) {
-        // Enable depth testing
-        unsafe {
-            gl::Enable(gl::DEPTH_TEST);
-            gl::Enable(gl::CULL_FACE);
-            gl::UseProgram(self.triangle_shader);
-        }
 
-        // Loop over every pixel
-        let mut resolution = self.window.get_framebuffer_size();
-        resolution.0 /= 1;
-        resolution.1 /= 1;
-        for y in 0..resolution.1 {
-            for x in 0..resolution.0 {
-                // Get UV coordinates from the X, Y position on screen
-                let u = ((x as f32 / resolution.0 as f32) * 2.0) - 1.0;
-                let v = ((y as f32 / resolution.1 as f32) * 2.0) - 1.0;
-
-                // Get the ray direction from the UV coordinates
-                let rot = Quat::from_euler(
-                    glam::EulerRot::ZYX,
-                    self.camera_rotation_euler.z,
-                    self.camera_rotation_euler.y,
-                    self.camera_rotation_euler.x,
-                );
-                let forward_vec = rot
-                    .mul_vec3(Vec3 {
-                        x: self.viewport_width * u,
-                        y: self.viewport_height * v,
-                        z: self.viewport_depth,
-                    })
-                    .normalize();
-
-                // Fill the screen with the ray direction
-                self.framebuffer_cpu[(x + y * resolution.0) as usize] = Pixel32 {
-                    r: ((forward_vec.x) * 255.0).clamp(0.0, 255.0) as u8,
-                    g: ((forward_vec.y) * 255.0).clamp(0.0, 255.0) as u8,
-                    b: ((forward_vec.z) * 255.0).clamp(0.0, 255.0) as u8,
-                    a: 255,
-                };
-
-                // Create a ray
-                let ray = Ray::new(self.camera_position, forward_vec, None);
-
-                let mut hit_info = HitInfoExt {
-                    distance: f32::INFINITY,
-                    vertex_interpolated: Vertex {
-                        position: Vec3::ZERO,
-                        normal: Vec3::ZERO,
-                        tangent: Vec4::ZERO,
-                        colour: Vec4::ZERO,
-                        uv0: Vec2::ZERO,
-                        uv1: Vec2::ZERO,
-                    },
-                };
-                // Loop over each mesh in the mesh queue
-                for entry in &self.mesh_queue {
-                    if let Some(bvh) = &entry.mesh.bvh {
-                        let bvh = bvh.as_ref();
-                        if let Some(curr_hit_info) = bvh.intersects(&ray) {
-                            if (curr_hit_info.distance < hit_info.distance) {
-                                hit_info = curr_hit_info;
-                            }
-                        }
-                    }
-                }
-
-                // Loop over each sphere in the sphere queue
-                for entry in &self.sphere_queue {
-                    if let Some(curr_hit_info) = entry.intersects(&ray) {
-                        if (curr_hit_info.distance < hit_info.distance
-                            && curr_hit_info.distance > 0.0)
-                        {
-                            hit_info = curr_hit_info;
-                        }
-                    }
-                }
-
-                self.framebuffer_cpu[(x + y * resolution.0) as usize] = Pixel32 {
-                    r: ((hit_info.vertex_interpolated.normal.x + 1.0) * 127.0) as u8,
-                    g: ((hit_info.vertex_interpolated.normal.y + 1.0) * 127.0) as u8,
-                    b: ((hit_info.vertex_interpolated.normal.z + 1.0) * 127.0) as u8,
-                    a: 255,
-                };
-            }
-        }
-        unsafe {
-            gl::BindTexture(gl::TEXTURE_2D, self.framebuffer_cpu_to_gpu);
-            gl::TexImage2D(
-                gl::TEXTURE_2D,
-                0,
-                gl::RGBA8 as _,
-                resolution.0,
-                resolution.1,
-                0,
-                gl::RGBA,
-                gl::UNSIGNED_BYTE,
-                self.framebuffer_cpu.as_ptr() as _,
-            );
-            gl::BindTexture(gl::TEXTURE_2D, 0);
-        }
-
-        // Render to window buffer
-        unsafe {
-            gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
-            gl::Viewport(
-                0,
-                0,
-                self.window_resolution_prev[0],
-                self.window_resolution_prev[1],
-            );
-            gl::Disable(gl::DEPTH_TEST);
-            gl::Disable(gl::CULL_FACE);
-            gl::UseProgram(self.fbo_shader);
-            gl::BindTexture(gl::TEXTURE_2D, self.framebuffer_cpu_to_gpu);
-            gl::BindVertexArray(self.quad_vao);
-            gl::DrawArrays(gl::TRIANGLES, 0, 6);
-            gl::BindTexture(gl::TEXTURE_2D, 0);
-        }
-    }
-
-    fn end_frame_raytrace_gpu(&mut self) {
-        // Enable depth testing
-        unsafe {
-            gl::Enable(gl::DEPTH_TEST);
-            gl::Enable(gl::CULL_FACE);
-            gl::UseProgram(self.raytracing_shader);
-        }
-
-        // Calculate camera rotation matrix
-        let camera_rot_mat = Mat3::from_euler(
-            glam::EulerRot::XYZ,
-            -self.camera_rotation_euler.x,
-            -self.camera_rotation_euler.y,
-            -self.camera_rotation_euler.z,
-        );
-
-        if self.mesh_queue.len() == 0 {
-            unsafe {
-                gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 3, self.gpu_spheres);
-                gl::BindImageTexture(
-                    0,
-                    self.framebuffer_texture,
-                    0,
-                    gl::FALSE,
-                    0,
-                    gl::READ_WRITE,
-                    gl::RGBA16F,
-                );
-                gl::UniformMatrix3fv(0, 1, gl::FALSE, camera_rot_mat.as_ref().as_ptr() as _);
-                gl::Uniform3fv(1, 1, self.camera_position.as_ref() as _);
-                gl::Uniform1f(2, self.viewport_width as _);
-                gl::Uniform1f(3, self.viewport_height as _);
-                gl::Uniform1f(4, self.viewport_depth as _);
-                gl::Uniform1i(5, self.sphere_queue.len() as _);
-                gl::DispatchCompute(
-                    self.window_resolution_prev[0] as _,
-                    self.window_resolution_prev[1] as _,
-                    1,
-                );
-                gl::MemoryBarrier(gl::SHADER_IMAGE_ACCESS_BARRIER_BIT);
-            }
-        }
-
-        // Render to window buffer
-        unsafe {
-            gl::BindFramebuffer(gl::FRAMEBUFFER, 0);
-            gl::Viewport(
-                0,
-                0,
-                self.window_resolution_prev[0],
-                self.window_resolution_prev[1],
-            );
-            gl::Disable(gl::DEPTH_TEST);
-            gl::Disable(gl::CULL_FACE);
-            gl::UseProgram(self.fbo_shader);
-            gl::BindTexture(gl::TEXTURE_2D, self.framebuffer_texture);
-            gl::BindVertexArray(self.quad_vao);
-            gl::DrawArrays(gl::TRIANGLES, 0, 6);
-            gl::BindTexture(gl::TEXTURE_2D, 0);
-        }
-    }
 
     fn update_framebuffer_resolution(&mut self) {
         // Update OpenGL framebuffer resolution
@@ -964,7 +632,7 @@ impl Renderer {
         if !self.models.contains_key(model_id) {
             return;
         }
-        for (name, mesh,  material) in self.models.get(model_id).unwrap().meshes.clone() {
+        for (_name, mesh,  material) in self.models.get(model_id).unwrap().meshes.clone() {
             self.mesh_queue.push(MeshQueueEntry {
                 mesh: Arc::new(mesh),
                 material: Arc::new(material),
@@ -1063,50 +731,6 @@ impl Renderer {
         self.draw_line(vertex001, vertex011, color);
     }
 
-    pub fn load_shader(&mut self, path: &Path) -> Result<u32, &str> {
-        // Create shader program object
-        let program;
-        unsafe {
-            program = gl::CreateProgram();
-        }
-
-        // Load and compile shader parts
-        load_shader_part(
-            gl::VERTEX_SHADER,
-            path.with_extension("vert").as_path(),
-            program,
-        );
-        load_shader_part(
-            gl::FRAGMENT_SHADER,
-            path.with_extension("frag").as_path(),
-            program,
-        );
-        unsafe {
-            gl::LinkProgram(program);
-        }
-
-        Ok(program)
-    }
-
-    pub fn load_shader_compute(&mut self, path: &Path) -> Result<u32, &str> {
-        let program;
-        unsafe {
-            program = gl::CreateProgram();
-        }
-
-        // Load and compile shader parts
-        load_shader_part(
-            gl::COMPUTE_SHADER,
-            path.with_extension("comp").as_path(),
-            program,
-        );
-        unsafe {
-            gl::LinkProgram(program);
-        }
-
-        Ok(program)
-    }
-
     pub fn upload_texture(&self, texture: &mut Texture) -> u32 {
         unsafe {
             gl::GenTextures(1, &mut texture.gl_id);
@@ -1137,45 +761,6 @@ impl Renderer {
     pub fn add_light(&mut self, light: Light) {
         self.light_queue.push(light);
         self.request_reupload = true;
-    }
-}
-fn load_shader_part(shader_type: GLenum, path: &Path, program: u32) {
-    // Load shader source
-    let mut file = File::open(path).expect("Failed to open shader file");
-    let mut source = String::new();
-    file.read_to_string(&mut source)
-        .expect("Failed to read file");
-    let source_len = source.len() as i32;
-
-    unsafe {
-        // Create shader part
-        let shader = gl::CreateShader(shader_type);
-        gl::ShaderSource(shader, 1, &source.as_bytes().as_ptr().cast(), &source_len);
-        gl::CompileShader(shader);
-
-        // Check for errors
-        let mut result = 0;
-        let mut log_length = 0;
-        gl::GetShaderiv(shader, gl::COMPILE_STATUS, &mut result);
-        gl::GetShaderiv(shader, gl::INFO_LOG_LENGTH, &mut log_length);
-        let mut error_message: Vec<u8> = vec![0; log_length as usize];
-        gl::GetShaderInfoLog(
-            shader,
-            log_length,
-            std::ptr::null_mut(),
-            error_message.as_mut_ptr().cast(),
-        );
-
-        // Did we get an error?
-        if log_length > 0 {
-            println!(
-                "Shader compilation error!\n{}",
-                std::str::from_utf8(error_message.as_slice()).unwrap()
-            )
-        }
-
-        // Attach to program
-        gl::AttachShader(program, shader);
     }
 }
 
