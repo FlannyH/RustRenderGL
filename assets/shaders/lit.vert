@@ -9,7 +9,7 @@ layout (location = 4) in vec2 i_uv0;
 layout (location = 5) in vec2 i_uv1;
 
 // Global constant buffer
-layout (std140, binding = 0) uniform const_buffer
+layout (std140, binding = 6) uniform const_buffer
 {
 	uniform mat4 u_view_projection_matrix;
 };

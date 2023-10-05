@@ -130,6 +130,12 @@ impl Renderer {
                 return Err(());
             }
         }
+        
+        // Enable debug callback
+        unsafe {
+            gl::DebugMessageCallback(Some(debug_callback), std::ptr::null());
+            gl::Enable(gl::DEBUG_OUTPUT);
+        }
 
         // Create renderer
         let mut renderer = Renderer {
@@ -357,6 +363,8 @@ impl Renderer {
     }
 
     pub fn end_frame(&mut self) {
+        self.upload_when_requested();
+
         match self.mode {
             RenderMode::None => {}
             RenderMode::Rasterized => self.end_frame_raster(),
@@ -376,20 +384,6 @@ impl Renderer {
             gl::UseProgram(self.triangle_shader);
         }
 
-        if self.request_reupload {
-           self.request_reupload = false;
-           unsafe {
-                gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, self.gpu_lights);
-                gl::BufferData(
-                    gl::SHADER_STORAGE_BUFFER,
-                    (self.light_queue.len() * std::mem::size_of::<Light>()) as isize,
-                    self.light_queue.as_ptr() as _,
-                    gl::STATIC_DRAW,
-                );
-                gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, 0);
-            }
-        }
-
         // Add spheres to render queue
         let model = self
             .models
@@ -404,8 +398,15 @@ impl Renderer {
                 gl::BindBuffer(gl::ARRAY_BUFFER, mesh.vbo);
 
                 // Bind the constant buffer
-                gl::BindBufferBase(gl::UNIFORM_BUFFER, 0, self.const_buffer_gpu);
+                gl::BindBufferBase(gl::UNIFORM_BUFFER, 6, self.const_buffer_gpu);
                 gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 0, self.gpu_lights);
+                
+                // Bind the texture
+                gl::Uniform1i(0, 0);
+                gl::Uniform1i(1, 0);
+                gl::Uniform1i(2, 0);
+                gl::Uniform1i(3, 0);
+                gl::Uniform1i(4, self.light_queue.len() as i32);
 
                 // Create model matrix for the sphere
                 let sphere_trans = Transform {
@@ -432,6 +433,7 @@ impl Renderer {
 
                 // Bind the constant buffer
                 gl::BindBufferBase(gl::UNIFORM_BUFFER, 0, self.const_buffer_gpu);
+                gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 0, self.gpu_lights);
 
                 // Bind the texture
                 gl::BindTexture(gl::TEXTURE0, material.tex_alb as u32);
@@ -517,6 +519,36 @@ impl Renderer {
             gl::BindVertexArray(self.quad_vao);
             gl::DrawArrays(gl::TRIANGLES, 0, 6);
             gl::BindTexture(gl::TEXTURE_2D, 0);
+        }
+    }
+
+    fn upload_when_requested(&mut self) {
+        if self.request_reupload {
+           self.request_reupload = false;
+
+           // Upload lights
+           unsafe {
+                gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, self.gpu_lights);
+                gl::BufferData(
+                    gl::SHADER_STORAGE_BUFFER,
+                    (self.light_queue.len() * std::mem::size_of::<Light>()) as isize,
+                    self.light_queue.as_ptr() as _,
+                    gl::STATIC_DRAW,
+                );
+                gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, 0);
+            }
+
+            // Upload spheres
+            unsafe {
+                gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, self.gpu_spheres);
+                gl::BufferData(
+                    gl::SHADER_STORAGE_BUFFER,
+                    (self.sphere_queue.len() * std::mem::size_of::<Sphere>()) as isize,
+                    self.sphere_queue.as_ptr() as _,
+                    gl::STATIC_DRAW,
+                );
+                gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, 0);
+            }
         }
     }
 
@@ -642,22 +674,6 @@ impl Renderer {
     }
 
     fn end_frame_raytrace_gpu(&mut self) {
-        // Upload spheres to GPU
-        if self.request_reupload {
-            unsafe {
-                gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, self.gpu_spheres);
-                gl::BufferData(
-                    gl::SHADER_STORAGE_BUFFER,
-                    (self.sphere_queue.len() * std::mem::size_of::<Sphere>()) as isize,
-                    self.sphere_queue.as_ptr() as _,
-                    gl::STATIC_DRAW,
-                );
-                gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, 0);
-            }
-            
-            self.request_reupload = false
-        }
-
         // Enable depth testing
         unsafe {
             gl::Enable(gl::DEPTH_TEST);
@@ -1160,5 +1176,20 @@ fn load_shader_part(shader_type: GLenum, path: &Path, program: u32) {
 
         // Attach to program
         gl::AttachShader(program, shader);
+    }
+}
+
+extern "system" fn debug_callback(
+    _source: gl::types::GLenum,
+    _type: gl::types::GLenum,
+    _id: gl::types::GLuint,
+    _severity: gl::types::GLenum,
+    _length: gl::types::GLsizei,
+    message: *const gl::types::GLchar,
+    _user_param: *mut std::ffi::c_void,
+) {
+    unsafe {
+        let error_msg = std::ffi::CStr::from_ptr(message).to_string_lossy();
+        println!("OpenGL Error: {}", error_msg);
     }
 }
