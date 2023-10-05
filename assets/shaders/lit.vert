@@ -28,7 +28,7 @@ out vec2 o_uv1;
 
 void main()
 {
-    o_world_pos = i_position;
+    o_world_pos = (u_model_matrix * vec4(i_position, 1)).xyz;
 	gl_Position = u_view_projection_matrix * u_model_matrix * vec4(i_position, 1);
     o_colour = i_colour;
     o_normal = i_normal;
