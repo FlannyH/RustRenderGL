@@ -61,7 +61,19 @@ fn main() {
     ));
     renderer.add_light(Light {
         position: Vec3::new(1.0, 0.5, 0.5) * 10.0,
-        color: Vec3::new(1.0, 0.5, 0.25),
+        color: Vec3::new(1.0, 0.2, 0.2),
+        intensity: 64.0,
+        _pad: 0.0,
+    });
+    renderer.add_light(Light {
+        position: Vec3::new(-1.0, 0.5, 0.5) * 10.0,
+        color: Vec3::new(0.2, 1.0, 0.2),
+        intensity: 64.0,
+        _pad: 0.0,
+    });
+    renderer.add_light(Light {
+        position: Vec3::new(1.0, -0.5,- 0.5) * 10.0,
+        color: Vec3::new(0.2, 0.2, 1.0),
         intensity: 64.0,
         _pad: 0.0,
     });
