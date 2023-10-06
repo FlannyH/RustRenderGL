@@ -48,9 +48,9 @@ void main() {
     // Sample point lights
     for (uint i = 0; i < n_lights; ++i) {
         vec3 surface_to_light = lights[i].position.xyz - o_world_pos;
-        float distance = length(surface_to_light);
-        float n_dot_l = dot(o_normal, surface_to_light) / distance;
-        float attenuation = 1 / (distance * distance);
+        float distance_ = length(surface_to_light);
+        float n_dot_l = max(0.0, dot(o_normal, surface_to_light) / distance_);
+        float attenuation = 1.0 / (distance_ * distance_);
         light_acc += n_dot_l * lights[i].color * lights[i].intensity * attenuation;
     }
     
