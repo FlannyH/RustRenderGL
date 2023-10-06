@@ -51,6 +51,12 @@ struct Ray {
     float length;
 };
 
+struct Light{
+    vec4 position; // ignore w
+    vec3 color;
+    float intensity;
+};
+
 layout(std430, binding = 0) buffer buf_nodes {
     BvhNode nodes[];
 };
@@ -72,35 +78,44 @@ layout(std430, binding = 4) buffer buf_counts {
     uint n_triangles;
 };
 
+layout (std430, binding = 5) buffer buf_light
+{
+    Light lights[];
+};
+
 layout (location = 0) uniform mat3 camera_rot;
 layout (location = 1) uniform vec3 camera_pos;
 layout (location = 2) uniform float viewport_width;
 layout (location = 3) uniform float viewport_height;
 layout (location = 4) uniform float viewport_depth;
 layout (location = 5) uniform int n_spheres;
+layout (location = 6) uniform int n_lights;
 
+vec3 position;
 vec3 direction;
 vec3 one_over_direction;
 int node_check_stack[256];
 int node_check_add_cursor = 0;
 int node_check_pop_cursor = 0;
 int node_check_stack_size = 0;
+HitInfo final_hit;
+HitInfo curr_hit;
 
 bool ray_intersect_aabb(AABB bounds) {
-    float tx1 = (bounds.min_x - camera_pos.x) * one_over_direction.x;
-    float tx2 = (bounds.max_x - camera_pos.x) * one_over_direction.x;
+    float tx1 = (bounds.min_x - position.x) * one_over_direction.x;
+    float tx2 = (bounds.max_x - position.x) * one_over_direction.x;
 
     float tmin = min(tx1, tx2);
     float tmax = max(tx1, tx2);
 
-    float ty1 = (bounds.min_y - camera_pos.y) * one_over_direction.y;
-    float ty2 = (bounds.max_y - camera_pos.y) * one_over_direction.y;
+    float ty1 = (bounds.min_y - position.y) * one_over_direction.y;
+    float ty2 = (bounds.max_y - position.y) * one_over_direction.y;
 
     tmin = max(tmin, min(ty1, ty2));
     tmax = min(tmax, max(ty1, ty2));
 
-    float tz1 = (bounds.min_z - camera_pos.z) * one_over_direction.z;
-    float tz2 = (bounds.max_z - camera_pos.z) * one_over_direction.z;
+    float tz1 = (bounds.min_z - position.z) * one_over_direction.z;
+    float tz2 = (bounds.max_z - position.z) * one_over_direction.z;
 
     tmin = max(tmin, min(tz1, tz2));
     tmax = min(tmax, max(tz1, tz2));
@@ -122,7 +137,7 @@ HitInfo ray_intersect_triangle(Triangle triangle) {
     }
 
     float inv_det = 1.0 / det;
-    vec3 v0_ray = camera_pos - triangle.v0.position;
+    vec3 v0_ray = position - triangle.v0.position;
     float u = inv_det * dot(v0_ray, h);
     if (u < 0.0 || u > 1.0) {
         return hit_info;
@@ -145,7 +160,7 @@ HitInfo ray_intersect_triangle(Triangle triangle) {
 HitInfo ray_intersect_sphere(Sphere sphere) {
     HitInfo hit;
     hit.distance = 1e30;
-	vec3 o2c = camera_pos - sphere.position;
+	vec3 o2c = position - sphere.position;
 	const float b = dot(o2c, direction);
 	const float c = dot(o2c, o2c) - sphere.radius_squared;
 	const float d = b * b - c;
@@ -158,15 +173,15 @@ HitInfo ray_intersect_sphere(Sphere sphere) {
         if (distance1 >= 0)
         {
             hit.distance = distance1;
-            hit.position = camera_pos + direction * hit.distance;
+            hit.position = position + direction * hit.distance;
             hit.normal = normalize(hit.position - sphere.position);
         }
         //If the smaller distance is under 0, we're inside the sphere, so use the other distance
         else
         {
             hit.distance = distance2;
-            hit.position = camera_pos + direction * hit.distance;
-            hit.normal = normalize(hit.position - sphere.position);
+            hit.position = position + direction * hit.distance;
+            hit.normal = normalize(sphere.position - hit.position);
         }
     }
     return hit;
@@ -223,6 +238,16 @@ HitInfo ray_intersect_bvh() {
     return final_hit;
 }
 
+void intersect_scene() {
+    final_hit.distance = 1e30;
+
+    for (int i = 0; i < n_spheres; ++i) {
+        curr_hit = ray_intersect_sphere(spheres[i]);
+        if (curr_hit.distance > 0 && curr_hit.distance < final_hit.distance) { 
+            final_hit = curr_hit;
+        }
+    }
+}
 
 void main() {
     // Get UV coordinates
@@ -241,22 +266,38 @@ void main() {
     direction = forward_vec * camera_rot;
     one_over_direction = vec3(1.0, 1.0, 1.0) / direction;
 
-    HitInfo final_hit;
-    HitInfo curr_hit;
-    final_hit.distance = 1e30;
-    //final_hit = ray_intersect_bvh();
+    position = camera_pos;
+    intersect_scene();
 
-    for (int i = 0; i < n_spheres; ++i) {
-        curr_hit = ray_intersect_sphere(spheres[i]);
-        if (curr_hit.distance > 0 && curr_hit.distance < final_hit.distance) { 
-            final_hit = curr_hit;
+	vec3 light_acc = vec3(0.0, 0.0, 0.0);
+    if (final_hit.distance < 1e30) {
+        // Store the old position
+        vec3 surface_hit_position = final_hit.position;
+        for (uint i = 0; i < n_lights; ++i) {
+            // Cast ray from the light source...
+            position = lights[i].position.xyz;
+
+            // ...towards the surface that was hit...
+            vec3 light_to_surface = position - surface_hit_position;
+            direction = normalize(-light_to_surface);
+            one_over_direction = vec3(1.0, 1.0, 1.0) / direction;
+           
+            float dist_hit_to_light = distance(surface_hit_position, position);
+            intersect_scene();
+
+            dist_hit_to_light -= final_hit.distance;
+            if (final_hit.distance > 0 && dist_hit_to_light <= 0.001) {
+                float n_dot_l = dot(final_hit.normal, -direction);
+                float attenuation = 1.0 / (final_hit.distance * final_hit.distance);
+                light_acc += n_dot_l * lights[i].color * lights[i].intensity * attenuation;
+            }
         }
     }
-
-	vec4 pixel = vec4(direction, 1.0);
-    if (final_hit.distance < 1e30) {
-        pixel = vec4(final_hit.normal, 1.0);
+    else {
+        light_acc.x = 0.1;
+        light_acc.y = 0.1;
+        light_acc.z = 0.2;
     }
     
-	imageStore(img_input, ivec2(pixel_coords.x, pixel_coords.y), pixel);
+	imageStore(img_input, ivec2(pixel_coords.x, pixel_coords.y), vec4(light_acc, 1.0));
 }

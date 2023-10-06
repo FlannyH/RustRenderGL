@@ -22,6 +22,7 @@ impl Renderer {
         if self.mesh_queue.len() == 0 {
             unsafe {
                 gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 3, self.gpu_spheres);
+                gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 5, self.gpu_lights);
                 gl::BindImageTexture(
                     0,
                     self.framebuffer_texture,
@@ -37,6 +38,7 @@ impl Renderer {
                 gl::Uniform1f(3, self.viewport_height as _);
                 gl::Uniform1f(4, self.viewport_depth as _);
                 gl::Uniform1i(5, self.sphere_queue.len() as _);
+                gl::Uniform1i(6, self.light_queue.len() as _);
                 gl::DispatchCompute(
                     self.window_resolution_prev[0] as _,
                     self.window_resolution_prev[1] as _,
