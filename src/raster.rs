@@ -75,6 +75,7 @@ impl Renderer {
                 gl::Uniform1i(2, material.tex_mtl_rgh);
                 gl::Uniform1i(3, material.tex_emm);
                 gl::Uniform1i(4, self.light_queue.len() as i32);
+                gl::UniformMatrix4fv(5, 1, gl::FALSE, entry.trans.as_ref().as_ptr() as *const _);
 
                 // Draw the model
                 gl::DrawArrays(gl::TRIANGLES, 0, mesh.verts.len() as _);

@@ -20,6 +20,8 @@ use crate::material::Material;
 use crate::mesh::Mesh;
 use crate::shader::ShaderProgram;
 use crate::sphere::Sphere;
+use crate::structs::Transform;
+use crate::texture::{TextureAtlas, TextureAtlasCell};
 use crate::{
     camera::Camera,
     input::UserInput,
@@ -52,6 +54,8 @@ pub struct Renderer {
 
     // Resources
     pub models: HashMap<u64, Model>,
+    pub texture_atlas: TextureAtlas,
+    pub tex_cells: Vec<TextureAtlasCell>,
 
     // Mesh render queue
     pub mesh_queue: Vec<MeshQueueEntry>,
@@ -92,6 +96,7 @@ pub struct Renderer {
 pub struct MeshQueueEntry {
     pub mesh: Arc<Mesh>,
     pub material: Arc<Material>,
+    pub trans: Mat4,
 }
 
 #[derive(Clone)]
@@ -171,6 +176,8 @@ impl Renderer {
             primitives_model: 0,
             request_reupload: false,
             gpu_lights: 0,
+            texture_atlas: TextureAtlas::new(2048, 2048, 16, 16),
+            tex_cells: Vec::new(),
         };
 
         // Set FOV
@@ -628,7 +635,7 @@ impl Renderer {
         Ok(hash_id)
     }
 
-    pub fn draw_model(&mut self, model_id: &u64) {
+    pub fn add_model(&mut self, model_id: &u64, transform: Transform) {
         // Render each mesh separately
         if !self.models.contains_key(model_id) {
             return;
@@ -637,6 +644,7 @@ impl Renderer {
             self.mesh_queue.push(MeshQueueEntry {
                 mesh: Arc::new(mesh),
                 material: Arc::new(material),
+                trans: transform.local_matrix(),
             });
         }
     }
@@ -740,12 +748,12 @@ impl Renderer {
                 gl::TEXTURE_2D,
                 0,
                 gl::RGBA8 as i32,
-                texture.width as i32,
-                texture.height as i32,
+                texture.image.width as i32,
+                texture.image.height as i32,
                 0,
                 gl::RGBA,
                 gl::UNSIGNED_BYTE,
-                texture.data.as_ptr() as *const _,
+                texture.image.data.as_ptr() as *const _,
             );
             gl::GenerateMipmap(gl::TEXTURE_2D);
             gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
@@ -775,7 +783,7 @@ extern "system" fn debug_callback(
     _user_param: *mut std::ffi::c_void,
 ) {
     unsafe {
-        let error_msg = std::ffi::CStr::from_ptr(message).to_string_lossy();
+        let _error_msg = std::ffi::CStr::from_ptr(message).to_string_lossy();
         //println!("OpenGL Error: {}", error_msg);
     }
 }

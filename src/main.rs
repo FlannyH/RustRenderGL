@@ -40,7 +40,7 @@ fn main() {
     let mut user_input = UserInput::new();
 
     // Upload the mesh to the GPU
-    let _model_spyro = renderer
+    let model_spyro = renderer
         .load_model(Path::new("assets/models/spyro.gltf"))
         .expect("Failed to upload model!");
 
@@ -63,6 +63,14 @@ fn main() {
         },
         5.0,
     ));
+    renderer.add_model(
+        &model_spyro, 
+        Transform {
+            translation: glam::vec3(0.0, 0.0, 3.0),
+            rotation: glam::quat(0.0, 0.0, 0.0, 1.0),
+            scale: glam::vec3(1.0, 1.0, 1.0),
+        },
+    );
     renderer.add_light(Light {
         position: Vec3::new(1.0, 0.5, 0.5) * 10.0,
         color: Vec3::new(1.0, 0.2, 0.2),
@@ -90,7 +98,6 @@ fn main() {
         camera.update(&user_input, 0.016); //todo: actual delta time
         renderer.update_camera(&camera);
         renderer.begin_frame();
-        //renderer.draw_model(&model_spyro);
         renderer.end_frame();
         if user_input.is_key_down(Key::Num1) {
             renderer.mode = RenderMode::Rasterized;

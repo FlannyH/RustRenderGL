@@ -2,6 +2,7 @@ use crate::bvh::Bvh;
 use crate::graphics::Renderer;
 use crate::material::Material;
 use crate::structs::{Transform, Triangle};
+use crate::texture::Image;
 use crate::{structs::Vertex, texture::Texture};
 use glam::Vec4Swizzles;
 use glam::{Mat4, Vec2, Vec3, Vec4};
@@ -319,10 +320,19 @@ impl Model {
 
             // Get the texture data
             if let Some(tex) = tex_info_alb {
-                new_material.tex_alb =
-                    renderer.upload_texture(&mut Texture::load_texture_from_gltf_image(
-                        &image_data[tex.texture().source().index()],
-                    )) as i32;
+                // Load image
+                let image = Image::load_image_from_gltf(
+                    &image_data[tex.texture().source().index()],
+                );
+
+                // Allocate in texture atlas
+                let x = unsafe { gl::GetError() };
+                dbg!(x);
+                let cell = renderer.texture_atlas.allocate_texture(image.width, image.height).unwrap();
+                renderer.texture_atlas.upload_image_to_cell(&image, &cell);
+                let x = unsafe { gl::GetError() };
+                dbg!(x);
+                renderer.tex_cells.push(cell);
             }
 
             materials.insert(

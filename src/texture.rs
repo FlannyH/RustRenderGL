@@ -1,12 +1,33 @@
 use crate::helpers::*;
-use std::path::Path;
+use std::{path::Path, ffi::c_void, ptr::null};
 
-pub struct Texture {
-    pub gl_id: u32,
+#[derive(Debug)]
+pub struct Image {
     pub width: usize,
     pub height: usize,
     pub depth: usize,
     pub data: Vec<u32>,
+}
+
+pub struct Texture {
+    pub gl_id: u32,
+    pub image: Image,
+}
+
+
+pub struct TextureAtlas {
+    pub grid: Vec<u8>,
+    pub cell_width: usize,
+    pub cell_height: usize,
+    pub texture: Texture,
+}
+
+#[derive(Debug)]
+pub struct TextureAtlasCell {
+    pub x: usize,
+    pub y: usize,
+    pub w: usize,
+    pub h: usize,
 }
 
 #[derive(PartialEq)]
@@ -39,7 +60,135 @@ enum PixelComp {
     Alpha,
 }
 
-impl Texture {
+impl TextureAtlas {
+    pub fn new(atlas_width: usize, atlas_height: usize, cell_width: usize, cell_height: usize) -> Self {
+        // Sanity check
+        assert!(atlas_width > cell_width);
+        assert!(atlas_height > cell_height);
+
+        // Create atlas image on CPU
+        let image = Image {
+            width: atlas_width,
+            height: atlas_height,
+            depth: 4,
+            data: vec![(atlas_width * atlas_height * 4) as u32],
+        };
+
+        // Create atlas texture on GPU
+        let mut texture = Texture {
+            gl_id: 0,
+            image,
+        };
+        unsafe {
+            gl::GenTextures(1, &mut texture.gl_id as *mut u32);
+            gl::BindTexture(gl::TEXTURE_2D, texture.gl_id);
+            gl::TexImage2D(
+                gl::TEXTURE_2D,
+                0,
+                gl::RGBA8 as _,
+                atlas_width as _,
+                atlas_height as _,
+                0,
+                gl::RGBA,
+                gl::FLOAT,
+                null(),
+            );
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as _);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as _);
+            gl::BindTexture(gl::TEXTURE_2D, 0);
+        };
+
+        // Create atlas grid for allocation
+        let grid_w = atlas_width / cell_width;
+        let grid_h = atlas_height / cell_height;
+        TextureAtlas {
+            grid: vec![0; grid_w * grid_h],
+            texture,
+            cell_width,
+            cell_height,
+        }
+    }
+
+    pub fn upload_image_to_cell(&self, image: &Image, cell: &TextureAtlasCell) {
+        unsafe {
+            gl::TextureSubImage2D(
+                self.texture.gl_id as _, 
+                0 as _,
+                cell.x as _, cell.y as _,
+                cell.w as _, cell.h as _,
+                match image.depth {
+                    3 => gl::RGB,
+                    4 => gl::RGBA,
+                    _ => panic!("Unsupported image format!")
+                },
+                gl::UNSIGNED_BYTE,
+                image.data.as_ptr() as *const c_void
+            )
+        }
+    }
+
+    pub fn allocate_texture(&mut self, width: usize, height: usize) -> Option<TextureAtlasCell> {
+        let width_pixels = width.next_power_of_two();
+        let height_pixels = height.next_power_of_two();
+        let grid_width = self.texture.image.width / self.cell_width;
+
+        // Loop over all possible grid entries
+        let mut found_spot = false;
+        let mut final_x = 0;
+        let mut final_y = 0;
+
+        // Check all cells
+        'b: for grid_y in (0..self.texture.image.height).step_by(width_pixels) {
+            for grid_x in (0..self.texture.image.width).step_by(height_pixels) {
+                // Check the cell's slots
+                let mut this_subcell_is_empty = true;
+                'a: for sub_y in 0..height_pixels {
+                    for sub_x in 0..width_pixels {
+                        // Get pixel to check
+                        let x = (grid_x + sub_x) / width_pixels;
+                        let y = (grid_y + sub_y) / height_pixels;
+                        let index = x + (y * grid_width);
+
+                        // Break if not occupied
+                        if self.grid[index] == 1 {
+                            this_subcell_is_empty = false;
+                            break 'a;
+                        }
+                    }
+                }
+                if this_subcell_is_empty {
+                    final_x = grid_x;
+                    final_y = grid_y;
+                    found_spot = true;
+                    break 'b;
+                }
+            }
+        }
+
+        // Once we've found a cell
+        if !found_spot {
+            return None;
+        }
+
+        // Mark it as occupied
+        for grid_y in (0..self.texture.image.height).step_by(width_pixels) {
+            for grid_x in (0..self.texture.image.width).step_by(height_pixels) {
+                for sub_y in 0..height_pixels {
+                    for sub_x in 0..width_pixels {
+                        let x = (grid_x + sub_x) / width_pixels;
+                        let y = (grid_y + sub_y) / height_pixels;
+                        let index = x + (y * grid_width);
+                        self.grid[index] = 1;
+                    }
+                }
+            }
+        }
+
+        Some(TextureAtlasCell { x: final_x, y: final_y, w: width, h: height })
+    }
+}
+
+impl Image {
     pub fn load(path: &Path) -> Self {
         //Load image
         let loaded_image = stb_image::image::load(path);
@@ -58,7 +207,6 @@ impl Texture {
                     })
                     .collect();
                 Self {
-                    gl_id: 0,
                     width: image.width,
                     height: image.height,
                     depth: image.depth,
@@ -76,7 +224,6 @@ impl Texture {
                     })
                     .collect();
                 Self {
-                    gl_id: 0,
                     width: image.width,
                     height: image.height,
                     depth: image.depth,
@@ -90,7 +237,7 @@ impl Texture {
         }
     }
 
-    pub fn load_texture_from_gltf_image(image: &gltf::image::Data) -> Texture {
+    pub fn load_image_from_gltf(image: &gltf::image::Data) -> Image {
         // Get pixel swizzle pattern
         let swizzle_pattern = match image.format {
             gltf::image::Format::R8 => vec![PixelComp::Red],
@@ -129,8 +276,7 @@ impl Texture {
             ],
             _ => panic!("Texture format unsupported!"),
         };
-        Texture {
-            gl_id: 0,
+        Image {
             width: image.width as usize,
             height: image.height as usize,
             depth: 4,
