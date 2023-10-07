@@ -326,12 +326,8 @@ impl Model {
                 );
 
                 // Allocate in texture atlas
-                let x = unsafe { gl::GetError() };
-                dbg!(x);
                 let cell = renderer.texture_atlas.allocate_texture(image.width, image.height).unwrap();
                 renderer.texture_atlas.upload_image_to_cell(&image, &cell);
-                let x = unsafe { gl::GetError() };
-                dbg!(x);
                 renderer.tex_cells.push(cell);
             }
 
