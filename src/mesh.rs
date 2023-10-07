@@ -3,7 +3,7 @@ use crate::graphics::Renderer;
 use crate::material::Material;
 use crate::structs::{Transform, Triangle};
 use crate::texture::Image;
-use crate::{structs::Vertex, texture::Texture};
+use crate::structs::Vertex;
 use glam::Vec4Swizzles;
 use glam::{Mat4, Vec2, Vec3, Vec4};
 use gltf::buffer::Data;
