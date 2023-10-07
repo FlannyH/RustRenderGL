@@ -128,63 +128,45 @@ impl TextureAtlas {
     }
 
     pub fn allocate_texture(&mut self, width: usize, height: usize) -> Option<TextureAtlasCell> {
-        let width_pixels = width.next_power_of_two();
-        let height_pixels = height.next_power_of_two();
-        let grid_width = self.texture.image.width / self.cell_width;
+        // First convert all widths and heights to cell space, rounding to the next power of 2
+        let tex_width_cell = 1.max(width / self.cell_width.next_power_of_two());
+        let tex_height_cell = 1.max(height / self.cell_height.next_power_of_two());
+        let atlas_width_cell = self.texture.image.width / self.cell_width;
+        let atlas_height_cell = self.texture.image.height / self.cell_height;
 
-        // Loop over all possible grid entries
-        let mut found_spot = false;
-        let mut final_x = 0;
-        let mut final_y = 0;
-
-        // Check all cells
-        'b: for grid_y in (0..self.texture.image.height).step_by(width_pixels) {
-            for grid_x in (0..self.texture.image.width).step_by(height_pixels) {
-                // Check the cell's slots
-                let mut this_subcell_is_empty = true;
-                'a: for sub_y in 0..height_pixels {
-                    for sub_x in 0..width_pixels {
-                        // Get pixel to check
-                        let x = (grid_x + sub_x) / width_pixels;
-                        let y = (grid_y + sub_y) / height_pixels;
-                        let index = x + (y * grid_width);
-
-                        // Break if not occupied
+        // Loop over all cells, that are aligned with the texture width
+        for cell_y in (0..atlas_height_cell).step_by(tex_height_cell) {
+            for cell_x in (0..atlas_width_cell).step_by(tex_width_cell) {
+                let mut is_free = true;
+                'in_cell_check: for subcell_offset_y in 0..tex_height_cell {
+                    for subcell_offset_x in 0..tex_width_cell {
+                        let index = (cell_x + subcell_offset_x) + ((cell_y + subcell_offset_y) * atlas_height_cell);
                         if self.grid[index] == 1 {
-                            this_subcell_is_empty = false;
-                            break 'a;
+                            is_free = false;
+                            break 'in_cell_check;
                         }
                     }
                 }
-                if this_subcell_is_empty {
-                    final_x = grid_x;
-                    final_y = grid_y;
-                    found_spot = true;
-                    break 'b;
-                }
-            }
-        }
-
-        // Once we've found a cell
-        if !found_spot {
-            return None;
-        }
-
-        // Mark it as occupied
-        for grid_y in (0..self.texture.image.height).step_by(width_pixels) {
-            for grid_x in (0..self.texture.image.width).step_by(height_pixels) {
-                for sub_y in 0..height_pixels {
-                    for sub_x in 0..width_pixels {
-                        let x = (grid_x + sub_x) / width_pixels;
-                        let y = (grid_y + sub_y) / height_pixels;
-                        let index = x + (y * grid_width);
-                        self.grid[index] = 1;
+                if is_free {
+                    // Mark it as occupied
+                    for subcell_offset_y in 0..tex_height_cell {
+                        for subcell_offset_x in 0..tex_width_cell {
+                            let index = (cell_x + subcell_offset_x) + ((cell_y + subcell_offset_y) * atlas_height_cell);
+                            self.grid[index] = 1;
+                        }
                     }
+
+                    return Some(TextureAtlasCell { 
+                        x: cell_x * self.cell_width, 
+                        y: cell_y * self.cell_height, 
+                        w: width, 
+                        h: height 
+                    });
                 }
             }
         }
 
-        Some(TextureAtlasCell { x: final_x, y: final_y, w: width, h: height })
+        None
     }
 }
 
