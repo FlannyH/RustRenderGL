@@ -21,6 +21,11 @@ impl Renderer {
             .unwrap();
         let mesh = &model.meshes[0].1;
 
+        // Bind texture atlas
+        unsafe {
+            gl::BindTextureUnit(0, self.texture_atlas.texture.gl_id as u32);
+        }
+
         for sphere in &self.sphere_queue {
             unsafe {
                 // Bind the vertex buffer
@@ -66,10 +71,6 @@ impl Renderer {
                 gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 0, self.gpu_lights);
 
                 // Bind the texture
-                gl::BindTexture(gl::TEXTURE0, material.tex_alb as u32);
-                gl::BindTexture(gl::TEXTURE1, material.tex_nrm as u32);
-                gl::BindTexture(gl::TEXTURE2, material.tex_mtl_rgh as u32);
-                gl::BindTexture(gl::TEXTURE3, material.tex_emm as u32);
                 gl::Uniform1i(0, material.tex_alb);
                 gl::Uniform1i(1, material.tex_nrm);
                 gl::Uniform1i(2, material.tex_mtl_rgh);

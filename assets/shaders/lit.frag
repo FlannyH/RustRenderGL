@@ -26,10 +26,7 @@ const float dither_table[] = {
     63, 31, 55, 23, 61, 29, 53, 21,
 };
 
-layout (binding = 0) uniform sampler2D tex_alb;
-layout (binding = 1) uniform sampler2D tex_nrm;
-layout (binding = 2) uniform sampler2D tex_mtl_rgh;
-layout (binding = 3) uniform sampler2D tex_emm;
+layout (binding = 0) uniform sampler2D texture_atlas;
 layout (location = 0) uniform int use_tex_alb;
 layout (location = 1) uniform int use_tex_nrm;
 layout (location = 2) uniform int use_tex_mtl_rgh;
@@ -55,7 +52,7 @@ void main() {
     }
     
     // Get albedo color from texture, or make it white if it doesn't have a texture
-    vec4 albedo = (use_tex_alb != 0) ? (texture(tex_alb, o_uv0)) : vec4(1.0, 1.0, 1.0, 1.0);
+    vec4 albedo = (use_tex_alb != 0) ? (texture(texture_atlas, o_uv0)) : vec4(1.0, 1.0, 1.0, 1.0);
 
     // Quantize and dither
     float color_depth = 255.0;
