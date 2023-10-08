@@ -40,8 +40,9 @@ fn main() {
     let mut user_input = UserInput::new();
 
     // Upload the mesh to the GPU
-    let model_spyro = renderer
-        .load_model(Path::new("assets/models/spyro.gltf"))
+    println!("hmm");
+    let model_sponza = renderer
+        .load_model(Path::new("assets/models/sponza/glTF/Sponza.gltf"))
         .expect("Failed to upload model!");
 
     // Create a camera
@@ -51,20 +52,12 @@ fn main() {
             rotation: glam::quat(0.0, 0.0, 0.0, 1.0),
             scale: glam::vec3(1.0, 1.0, 1.0),
         },
-        5.0,
+        0.5,
         0.005,
     );
 
-    renderer.add_sphere(Sphere::new(
-        Vec3 {
-            x: 0.0,
-            y: 0.0,
-            z: 0.0,
-        },
-        5.0,
-    ));
     renderer.add_model(
-        &model_spyro, 
+        &model_sponza, 
         Transform {
             translation: glam::vec3(0.0, 0.0, 3.0),
             rotation: glam::quat(0.0, 0.0, 0.0, 1.0),
@@ -72,21 +65,21 @@ fn main() {
         },
     );
     renderer.add_light(Light {
-        position: Vec3::new(1.0, 0.5, 0.5) * 10.0,
-        color: Vec3::new(1.0, 0.2, 0.2),
-        intensity: 64.0,
+        position: Vec3::new(1.0, 1.5, 0.5) * 1000.0,
+        color: Vec3::new(1.0, 1.0, 0.8),
+        intensity: 200000000.0,
         _pad: 0.0,
     });
     renderer.add_light(Light {
-        position: Vec3::new(-1.0, 0.5, 0.5) * 10.0,
-        color: Vec3::new(0.2, 1.0, 0.2),
-        intensity: 64.0,
+        position: Vec3::new(-1.0, 0.5, 0.5) * 1000.0,
+        color: Vec3::new(0.1, 0.1, 0.2),
+        intensity: 61000000.0,
         _pad: 0.0,
     });
     renderer.add_light(Light {
-        position: Vec3::new(1.0, -0.5,- 0.5) * 10.0,
+        position: Vec3::new(1.0, -0.5,- 0.5) * 1000.0,
         color: Vec3::new(0.2, 0.2, 1.0),
-        intensity: 64.0,
+        intensity: 24000000.0,
         _pad: 0.0,
     });
     // Main loop
