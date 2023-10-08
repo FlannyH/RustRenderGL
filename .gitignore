@@ -18,3 +18,5 @@ Cargo.lock
 
 /target
 .vscode/launch.json
+assets/textures/amida
+*amida*
