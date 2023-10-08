@@ -188,7 +188,7 @@ impl Renderer {
             primitives_model: 0,
             request_reupload: false,
             gpu_lights: 0,
-            texture_atlas: TextureAtlas::new(8192, 8192, 64, 64),
+            texture_atlas: TextureAtlas::new(16384, 16384, 64, 64),
             tex_cells: Vec::new(),
             gpu_textures: 0,
         };

@@ -81,92 +81,34 @@ fn create_vertex_array(
     let mut colour_vec = Vec::<Vec4>::new();
     let mut texcoord0_vec = Vec::<Vec2>::new();
     let mut texcoord1_vec = Vec::<Vec2>::new();
-    let mut indices = Vec::<u16>::new();
+    let mut indices = Vec::<u32>::new();
 
-    // Loop over all the primitive attributes
-    for (name, accessor) in primitive.attributes() {
-        // Get buffer view
-        let bufferview = accessor.view().unwrap();
-
-        // Find location in buffer
-        let buffer_index = bufferview.buffer().index();
-        let buffer_offset = bufferview.offset();
-        let buffer_end = bufferview.offset() + bufferview.length();
-
-        // Find location in buffer
-        let buffer_base = &mesh_data[buffer_index].0;
-        let buffer_slice = buffer_base.get(buffer_offset..buffer_end).unwrap();
-
-        // Assign to the vectors
-        match name.to_string().as_str() {
-            "POSITION" => {
-                let values = convert_gltf_buffer_to_f32(buffer_slice, &accessor);
-                for i in (0..accessor.count() * 3).step_by(3) {
-                    let slice = &values[i..i + 3];
-                    position_vec.push(Vec3::from_slice(slice));
-                }
-            }
-            "NORMAL" => {
-                let values = convert_gltf_buffer_to_f32(buffer_slice, &accessor);
-                for i in (0..accessor.count() * 3).step_by(3) {
-                    let slice = &values[i..i + 3];
-                    normal_vec.push(Vec3::from_slice(slice));
-                }
-            }
-            "TANGENT" => {
-                let values = convert_gltf_buffer_to_f32(buffer_slice, &accessor);
-                for i in (0..accessor.count() * 4).step_by(4) {
-                    let slice = &values[i..i + 4];
-                    tangent_vec.push(Vec4::from_slice(slice));
-                }
-            }
-            "TEXCOORD_0" => {
-                let values = convert_gltf_buffer_to_f32(buffer_slice, &accessor);
-                for i in (0..accessor.count() * 2).step_by(2) {
-                    let slice = &values[i..i + 2];
-                    texcoord0_vec.push(Vec2::from_slice(slice));
-                }
-            }
-            "TEXCOORD_1" => {
-                let values = convert_gltf_buffer_to_f32(buffer_slice, &accessor);
-                for i in (0..accessor.count() * 2).step_by(2) {
-                    let slice = &values[i..i + 2];
-                    texcoord1_vec.push(Vec2::from_slice(slice));
-                }
-            }
-            "COLOR_0" => {
-                let values = convert_gltf_buffer_to_f32(buffer_slice, &accessor);
-                for i in (0..accessor.count() * 4).step_by(4) {
-                    let slice = &values[i..i + 4];
-                    colour_vec.push(Vec4::from_slice(slice));
-                }
-            }
-            _ => {}
-        }
+    let reader = primitive.reader(|buffer| Some(&mesh_data[buffer.index()]));
+    
+    if let Some(indices_reader) = reader.read_indices() {
+        indices_reader.into_u32().for_each(|i| indices.push(i));
     }
-
-    // Find indices
-    {
-        // Get accessor
-        let accessor = primitive.indices().unwrap();
-
-        // Get buffer view
-        let bufferview = accessor.view().unwrap();
-
-        // Find location in buffer
-        let buffer_index = bufferview.buffer().index();
-        let buffer_offset = bufferview.offset();
-        let buffer_end = bufferview.offset() + bufferview.length();
-
-        // Find location in buffer
-        let buffer_base = &mesh_data[buffer_index].0;
-        let buffer_slice = buffer_base.get(buffer_offset..buffer_end).unwrap();
-
-        // Convert from raw buffer to f32 vec - this is incredibly cursed but it'll have to do
-        let indices_f32 = convert_gltf_buffer_to_f32(buffer_slice, &accessor);
-        for index in indices_f32 {
-            indices.push(index as u16);
-        }
+    if let Some(positions_reader) = reader.read_positions() {
+        positions_reader.for_each(|p| position_vec.push(Vec3::new(p[0], p[1], p[2])));
+    }
+    if let Some(normals_reader) = reader.read_normals() {
+        normals_reader.for_each(|n| normal_vec.push(Vec3::new(n[0], n[1], n[2])));
+    }
+    if let Some(tangent_reader) = reader.read_tangents() {
+        tangent_reader.for_each(|n| tangent_vec.push(Vec4::new(n[0], n[1], n[2], n[3])));
+    }
+    if let Some(colors_reader) = reader.read_colors(0) {
+        colors_reader.into_rgba_f32().for_each(|n| colour_vec.push(Vec4::new(n[0], n[1], n[2], n[3])));
+    }
+    if let Some(tex_coord_reader) = reader.read_tex_coords(0) {
+        tex_coord_reader
+            .into_f32()
+            .for_each(|tc| texcoord0_vec.push(Vec2::new(tc[0], tc[1])));
+    }
+    if let Some(tex_coord_reader) = reader.read_tex_coords(1) {
+        tex_coord_reader
+            .into_f32()
+            .for_each(|tc| texcoord1_vec.push(Vec2::new(tc[0], tc[1])));
     }
 
     // Create vertex array
@@ -261,7 +203,24 @@ fn traverse_nodes(
         for primitive in primitives {
             let mut mesh_buffer_data =
                 create_vertex_array(&primitive, mesh_data, new_local_transform);
-            let material = String::from(primitive.material().name().unwrap_or("untitled"));
+
+            // Determine material name
+            let material = String::from({
+                if let Some(material_name) = primitive.material().name() {
+                    material_name
+                }
+                else if let Some(texture) = primitive.material().pbr_metallic_roughness().base_color_texture() {
+                    let texture_source = texture.texture().source().source();
+                    match texture_source {
+                        gltf::image::Source::View { view: _, mime_type: _ } => panic!(),
+                        gltf::image::Source::Uri { uri, mime_type: _ } => uri,
+                    }
+                }
+                else {
+                    "untitled"
+                }
+            });
+
             #[allow(clippy::map_entry)] // This was really annoying and made the code less readable
             if primitives_processed.contains_key(&material) {
                 let mesh: &mut Mesh = primitives_processed.get_mut(&material).unwrap();
@@ -305,6 +264,23 @@ impl Model {
         for material in gltf_document.materials() {
             let mut new_material = Material::new();
 
+            // Determine material name
+            let material_name = String::from({
+                if let Some(material_name) = material.name() {
+                    material_name
+                }
+                else if let Some(texture) = material.pbr_metallic_roughness().base_color_texture() {
+                    let texture_source = texture.texture().source().source();
+                    match texture_source {
+                        gltf::image::Source::View { view: _, mime_type: _ } => panic!(),
+                        gltf::image::Source::Uri { uri, mime_type: _ } => uri,
+                    }
+                }
+                else {
+                    "untitled"
+                }
+            });
+
             // Get PBR parameters
             new_material.scl_rgh = material.pbr_metallic_roughness().roughness_factor();
             new_material.scl_mtl = material.pbr_metallic_roughness().metallic_factor();
@@ -312,11 +288,11 @@ impl Model {
 
             // Try to find textures
             let tex_info_alb = material.pbr_metallic_roughness().base_color_texture();
-            let _tex_info_mtl_rgh = material
+            let tex_info_mtl_rgh = material
                 .pbr_metallic_roughness()
                 .metallic_roughness_texture();
-            let _tex_info_nrm = material.normal_texture();
-            let _tex_info_emm = material.emissive_texture();
+            let tex_info_nrm = material.normal_texture();
+            let tex_info_emm = material.emissive_texture();
 
             // Get the texture data
             if let Some(tex) = tex_info_alb {
@@ -331,9 +307,45 @@ impl Model {
                 renderer.texture_atlas.upload_image_to_cell(&image, &cell);
                 renderer.tex_cells.push(cell);
             }
+            if let Some(tex) = tex_info_nrm {
+                // Load image
+                let image = Image::load_image_from_gltf(
+                    &image_data[tex.texture().source().index()],
+                );
+
+                // Allocate in texture atlas
+                new_material.tex_nrm = renderer.tex_cells.len() as i32;
+                let cell = renderer.texture_atlas.allocate_texture(image.width, image.height).unwrap();
+                renderer.texture_atlas.upload_image_to_cell(&image, &cell);
+                renderer.tex_cells.push(cell);
+            }
+            if let Some(tex) = tex_info_mtl_rgh {
+                // Load image
+                let image = Image::load_image_from_gltf(
+                    &image_data[tex.texture().source().index()],
+                );
+
+                // Allocate in texture atlas
+                new_material.tex_mtl_rgh = renderer.tex_cells.len() as i32;
+                let cell = renderer.texture_atlas.allocate_texture(image.width, image.height).unwrap();
+                renderer.texture_atlas.upload_image_to_cell(&image, &cell);
+                renderer.tex_cells.push(cell);
+            }
+            if let Some(tex) = tex_info_emm {
+                // Load image
+                let image = Image::load_image_from_gltf(
+                    &image_data[tex.texture().source().index()],
+                );
+
+                // Allocate in texture atlas
+                new_material.tex_emm = renderer.tex_cells.len() as i32;
+                let cell = renderer.texture_atlas.allocate_texture(image.width, image.height).unwrap();
+                renderer.texture_atlas.upload_image_to_cell(&image, &cell);
+                renderer.tex_cells.push(cell);
+            }
 
             materials.insert(
-                String::from(material.name().unwrap_or("untitled")),
+                material_name,
                 new_material,
             );
         }
