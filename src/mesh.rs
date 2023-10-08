@@ -326,6 +326,7 @@ impl Model {
                 );
 
                 // Allocate in texture atlas
+                new_material.tex_alb = renderer.tex_cells.len() as i32;
                 let cell = renderer.texture_atlas.allocate_texture(image.width, image.height).unwrap();
                 renderer.texture_atlas.upload_image_to_cell(&image, &cell);
                 renderer.tex_cells.push(cell);

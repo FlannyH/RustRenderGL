@@ -56,6 +56,7 @@ pub struct Renderer {
     pub models: HashMap<u64, Model>,
     pub texture_atlas: TextureAtlas,
     pub tex_cells: Vec<TextureAtlasCell>,
+    pub gpu_textures: u32,
 
     // Mesh render queue
     pub mesh_queue: Vec<MeshQueueEntry>,
@@ -132,6 +133,17 @@ impl Renderer {
             }
         }
         
+        unsafe {
+            let mut max_tex_size = 0;
+            gl::GetIntegerv(gl::MAX_TEXTURE_SIZE, &mut max_tex_size);
+            let renderer = gl::GetString(gl::RENDERER);
+            let renderer = std::slice::from_raw_parts(renderer, libc::strlen(renderer as *const libc::c_char));
+            let renderer = std::str::from_utf8(renderer).unwrap();
+            println!("Renderer initialized!");
+            println!("\tDevice: {renderer}");
+            println!("\tMax texture size: {max_tex_size}x{max_tex_size}");
+        }
+
         // Enable debug callback
         unsafe {
             gl::DebugMessageCallback(Some(debug_callback), std::ptr::null());
@@ -150,7 +162,7 @@ impl Renderer {
             quad_vao: 0,
             fbo_shader: None,
             window_resolution_prev: [0, 0],
-            mode: RenderMode::RaytracedCPU,
+            mode: RenderMode::Rasterized,
             models: HashMap::new(),
             mesh_queue: vec![],
             line_queue: vec![],
@@ -176,8 +188,9 @@ impl Renderer {
             primitives_model: 0,
             request_reupload: false,
             gpu_lights: 0,
-            texture_atlas: TextureAtlas::new(4096, 4096, 64, 64),
+            texture_atlas: TextureAtlas::new(8192, 8192, 64, 64),
             tex_cells: Vec::new(),
+            gpu_textures: 0,
         };
 
         // Set FOV
@@ -311,6 +324,7 @@ impl Renderer {
         unsafe {
             gl::GenBuffers(1, &mut renderer.gpu_spheres);
             gl::GenBuffers(1, &mut renderer.gpu_lights);
+            gl::GenBuffers(1, &mut renderer.gpu_textures);
         }
 
         // Load sphere model for rasterizer
@@ -329,7 +343,7 @@ impl Renderer {
     pub fn update_camera(&mut self, camera: &Camera) {
         // Update CPU-side buffer
         let view_matrix = camera.transform.view_matrix();
-        let proj_matrix = Mat4::perspective_rh(self.fov, self.aspect_ratio, 0.1, 1000.0);
+        let proj_matrix = Mat4::perspective_rh(self.fov, self.aspect_ratio, 0.001, 1000.0);
         self.const_buffer_cpu.view_projection_matrix = proj_matrix * view_matrix;
 
         // Update GPU-side buffer
@@ -402,6 +416,18 @@ impl Renderer {
                     gl::SHADER_STORAGE_BUFFER,
                     (self.sphere_queue.len() * std::mem::size_of::<Sphere>()) as isize,
                     self.sphere_queue.as_ptr() as _,
+                    gl::STATIC_DRAW,
+                );
+                gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, 0);
+            }
+
+            // Upload texture metadata
+            unsafe {
+                gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, self.gpu_textures);
+                gl::BufferData(
+                    gl::SHADER_STORAGE_BUFFER,
+                    (self.tex_cells.len() * std::mem::size_of::<TextureAtlasCell>()) as isize,
+                    self.tex_cells.as_ptr() as _,
                     gl::STATIC_DRAW,
                 );
                 gl::BindBuffer(gl::SHADER_STORAGE_BUFFER, 0);

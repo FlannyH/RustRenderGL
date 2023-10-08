@@ -14,7 +14,6 @@ pub struct Texture {
     pub image: Image,
 }
 
-
 pub struct TextureAtlas {
     pub grid: Vec<u8>,
     pub cell_width: usize,
@@ -23,11 +22,12 @@ pub struct TextureAtlas {
 }
 
 #[derive(Debug)]
+#[repr(C)]
 pub struct TextureAtlasCell {
-    pub x: usize,
-    pub y: usize,
-    pub w: usize,
-    pub h: usize,
+    pub x: f32,
+    pub y: f32,
+    pub w: f32,
+    pub h: f32,
 }
 
 #[derive(PartialEq)]
@@ -156,16 +156,18 @@ impl TextureAtlas {
                         }
                     }
 
+                    println!("Allocated texture of size {width}x{height}!");
                     return Some(TextureAtlasCell { 
-                        x: cell_x * self.cell_width, 
-                        y: cell_y * self.cell_height, 
-                        w: width, 
-                        h: height 
+                        x: (cell_x * self.cell_width) as f32, 
+                        y: (cell_y * self.cell_height) as f32, 
+                        w: width as f32, 
+                        h: height as f32 
                     });
                 }
             }
         }
 
+        println!("Failed to allocate texture of size {width}x{height}!");
         None
     }
 }

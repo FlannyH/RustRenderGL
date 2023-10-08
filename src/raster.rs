@@ -21,9 +21,12 @@ impl Renderer {
             .unwrap();
         let mesh = &model.meshes[0].1;
 
-        // Bind texture atlas
+        // Bind texture atlas and buffers
         unsafe {
             gl::BindTextureUnit(0, self.texture_atlas.texture.gl_id as u32);
+            gl::BindBufferBase(gl::UNIFORM_BUFFER, 7, self.const_buffer_gpu);
+            gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 0, self.gpu_lights);
+            gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 1, self.gpu_textures);
         }
 
         for sphere in &self.sphere_queue {
@@ -31,10 +34,6 @@ impl Renderer {
                 // Bind the vertex buffer
                 gl::BindVertexArray(mesh.vao);
                 gl::BindBuffer(gl::ARRAY_BUFFER, mesh.vbo);
-
-                // Bind the constant buffer
-                gl::BindBufferBase(gl::UNIFORM_BUFFER, 6, self.const_buffer_gpu);
-                gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 0, self.gpu_lights);
                 
                 // Bind the texture
                 gl::Uniform1i(0, 0);
@@ -66,17 +65,15 @@ impl Renderer {
                 gl::BindVertexArray(mesh.vao);
                 gl::BindBuffer(gl::ARRAY_BUFFER, mesh.vbo);
 
-                // Bind the constant buffer
-                gl::BindBufferBase(gl::UNIFORM_BUFFER, 0, self.const_buffer_gpu);
-                gl::BindBufferBase(gl::SHADER_STORAGE_BUFFER, 0, self.gpu_lights);
-
                 // Bind the texture
+                let atlas_size = [self.texture_atlas.texture.image.width as f32, self.texture_atlas.texture.image.height as f32];
                 gl::Uniform1i(0, material.tex_alb);
                 gl::Uniform1i(1, material.tex_nrm);
                 gl::Uniform1i(2, material.tex_mtl_rgh);
                 gl::Uniform1i(3, material.tex_emm);
                 gl::Uniform1i(4, self.light_queue.len() as i32);
-                gl::UniformMatrix4fv(5, 1, gl::FALSE, entry.trans.as_ref().as_ptr() as *const _);
+                gl::Uniform2fv(5, 1, &atlas_size as *const _);
+                gl::UniformMatrix4fv(6, 1, gl::FALSE, entry.trans.as_ref().as_ptr() as *const _);
 
                 // Draw the model
                 gl::DrawArrays(gl::TRIANGLES, 0, mesh.verts.len() as _);

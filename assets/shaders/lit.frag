@@ -27,20 +27,25 @@ const float dither_table[] = {
 };
 
 layout (binding = 0) uniform sampler2D texture_atlas;
-layout (location = 0) uniform int use_tex_alb;
-layout (location = 1) uniform int use_tex_nrm;
-layout (location = 2) uniform int use_tex_mtl_rgh;
-layout (location = 3) uniform int use_tex_emm;
+layout (location = 0) uniform int tex_alb;
+layout (location = 1) uniform int tex_nrm;
+layout (location = 2) uniform int tex_mtl_rgh;
+layout (location = 3) uniform int tex_emm;
 layout (location = 4) uniform int n_lights;
+layout (location = 5) uniform vec2 atlas_size;
 layout (std430, binding = 0) buffer light
 {
     Light lights[];
+};
+layout (std430, binding = 1) buffer texture_metadata
+{
+    vec4 textures[];
 };
 
 out vec4 frag_color;
 
 void main() {
-    vec3 light_acc = vec3(0.0, 0.0, 0.0);
+    vec3 light_acc = vec3(0.1, 0.1, 0.1);
 
     // Sample point lights
     for (uint i = 0; i < n_lights; ++i) {
@@ -52,7 +57,10 @@ void main() {
     }
     
     // Get albedo color from texture, or make it white if it doesn't have a texture
-    vec4 albedo = (use_tex_alb != 0) ? (texture(texture_atlas, o_uv0)) : vec4(1.0, 1.0, 1.0, 1.0);
+    vec2 mod_uv0 = mod(o_uv0, vec2(1.0));
+    vec2 corrected_uv = (textures[tex_alb].xy + (mod(o_uv0, vec2(1.0)) * textures[tex_alb].zw)) / atlas_size;
+    vec4 albedo = (tex_alb != -1) ? (texture(texture_atlas, corrected_uv)) : vec4(1.0, 1.0, 1.0, 1.0);
+    if (albedo.w < 0.5) discard;
 
     // Quantize and dither
     float color_depth = 255.0;
